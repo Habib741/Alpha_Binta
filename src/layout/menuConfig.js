@@ -1,0 +1,24 @@
+export const menuConfig = {
+  DIRECTRICE: [
+    { label: "Tableau de bord", to: "/dashboard/directrice", icon: "🏠" },
+    { label: "Élèves", to: "/eleves", icon: "🧒" },
+    { label: "Présences", to: "/presences", icon: "📋" },
+    { label: "Paiements", to: "/paiements", icon: "💳" },
+    { label: "Parents", to: "/parents", icon: "👪" },
+    { label: "Informations école", to: "/informations", icon: "📣" },
+    { label: "Mon profil", to: "/profil", icon: "⚙️" },
+  ],
+  ENSEIGNANT: [
+    { label: "Tableau de bord", to: "/dashboard/enseignant", icon: "🏠" },
+    { label: "Élèves", to: "/eleves", icon: "🧒" },
+    { label: "Présences", to: "/presences", icon: "📋" },
+    { label: "Mon profil", to: "/profil", icon: "⚙️" },
+  ],
+  PARENT: [
+    { label: "Tableau de bord", to: "/dashboard/parent", icon: "🏠" },
+    { label: "Mes enfants", to: "/mes-enfants", icon: "🧒" },
+    { label: "Paiements", to: "/mes-paiements", icon: "💳" },
+    { label: "Informations école", to: "/informations", icon: "📣" },
+    { label: "Mon profil", to: "/profil", icon: "⚙️" },
+  ],
+};
