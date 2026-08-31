@@ -18,7 +18,8 @@ export function dateDuJourISO() {
 
 export const libelleType = {
   INSCRIPTION: "Inscription",
-  MENSUALITE: "Mensualité",
+  MENSUALITE: "Mensualité (octobre à juin)",
+  BLAUSE: "Blouse",
   COTISATION: "Cotisation",
 };
 

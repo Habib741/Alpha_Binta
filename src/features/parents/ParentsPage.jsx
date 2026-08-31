@@ -25,6 +25,7 @@ export default function ParentsPage() {
     nom: "",
     telephone: "",
     email: "",
+    mot_de_passe: "",
     adresse: "",
     enfants: [],
   });
@@ -74,6 +75,7 @@ export default function ParentsPage() {
         nom: "",
         telephone: "",
         email: "",
+        mot_de_passe: "",
         adresse: "",
         enfants: [],
       });
@@ -132,6 +134,16 @@ export default function ParentsPage() {
                   required
                   value={form.telephone}
                   onChange={(e) => setForm({ ...form, telephone: e.target.value })}
+                />
+              </div>
+              <div className="field">
+                <label>Mot de passe</label>
+                <input
+                  required
+                  type="password"
+                  value={form.mot_de_passe}
+                  onChange={(e) => setForm({ ...form, mot_de_passe: e.target.value })}
+                  placeholder="Choisir un mot de passe"
                 />
               </div>
               <div className="field" style={{ gridColumn: "1 / -1" }}>

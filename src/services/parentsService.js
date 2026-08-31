@@ -19,8 +19,14 @@ export async function listerEnfantsDisponibles() {
   return data;
 }
 
-export async function creerCompteParent({ prenom, nom, telephone, email, adresse, enfants = [] }) {
-  const motDePasse = `AB-${prenom.slice(0, 2).toUpperCase()}-${Math.random().toString(36).slice(-8).toUpperCase()}`;
+export async function creerCompteParent({ prenom, nom, telephone, email, adresse, mot_de_passe, enfants = [] }) {
+  const motDePasse = String(mot_de_passe || "").trim();
+  if (!motDePasse) {
+    throw new Error("Le mot de passe du parent est obligatoire.");
+  }
+
+  const { data: sessionActuelle } = await supabase.auth.getSession();
+  const sessionDirectrice = sessionActuelle?.session;
 
   const { data: authData, error: authError } = await supabase.auth.signUp({
     email,
@@ -43,13 +49,16 @@ export async function creerCompteParent({ prenom, nom, telephone, email, adresse
 
   const { data: profileData, error: profileError } = await supabase
     .from("profiles")
-    .insert({
-      id: userId,
-      role: "PARENT",
-      prenom,
-      nom,
-      telephone,
-    })
+    .upsert(
+      {
+        id: userId,
+        role: "PARENT",
+        prenom,
+        nom,
+        telephone,
+      },
+      { onConflict: "id" }
+    )
     .select()
     .single();
 
@@ -68,6 +77,15 @@ export async function creerCompteParent({ prenom, nom, telephone, email, adresse
     .single();
 
   if (parentError) throw parentError;
+
+  if (sessionDirectrice?.user?.id && sessionDirectrice.user.id !== userId) {
+    await supabase.auth.setSession({
+      access_token: sessionDirectrice.access_token,
+      refresh_token: sessionDirectrice.refresh_token,
+    });
+  } else if (!sessionDirectrice) {
+    await supabase.auth.signOut();
+  }
 
   if (enfants.length > 0) {
     const liens = enfants.map((eleveId) => ({

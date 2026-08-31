@@ -41,6 +41,35 @@ create table profiles (
 );
 create index idx_profiles_role on profiles(role);
 
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id, role, prenom, nom, telephone)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'role', 'PARENT'),
+    coalesce(new.raw_user_meta_data->>'prenom', 'Utilisateur'),
+    coalesce(new.raw_user_meta_data->>'nom', 'Sans nom'),
+    new.raw_user_meta_data->>'telephone'
+  )
+  on conflict (id) do update
+  set role = excluded.role,
+      prenom = excluded.prenom,
+      nom = excluded.nom,
+      telephone = coalesce(excluded.telephone, public.profiles.telephone);
+
+  return new;
+end;
+$$;
+
+create or replace trigger on_auth_user_created
+after insert on auth.users
+for each row execute procedure public.handle_new_user();
+
 -- ============================================================================
 -- 3. ÉLÈVES ET INSCRIPTIONS
 -- ============================================================================
@@ -67,19 +96,47 @@ create table inscriptions (
 );
 create index idx_inscriptions_annee_section on inscriptions(annee_scolaire_id, section_id);
 
+create table if not exists documents_enfants (
+  id uuid primary key default gen_random_uuid(),
+  eleve_id uuid not null references eleves(id) on delete cascade,
+  type_document text not null check (
+    type_document in (
+      'EXTRAIT_NAISSANCE',
+      'CNI_PARENT',
+      'PHOTO_IDENTITE_1',
+      'PHOTO_IDENTITE_2',
+      'CARNET_SANTE'
+    )
+  ),
+  nom_fichier text not null,
+  chemin_storage text not null,
+  mime_type text,
+  taille_bytes bigint,
+  obligatoire boolean not null default true,
+  cree_le timestamptz not null default now(),
+  unique (eleve_id, type_document)
+);
+create index if not exists idx_documents_enfants_eleve on documents_enfants (eleve_id);
+create index if not exists idx_documents_enfants_type on documents_enfants (type_document);
+
 -- ============================================================================
 -- 4. TARIFS
 -- ============================================================================
+
+drop table if exists paiements cascade;
+drop table if exists tarifs cascade;
 
 create table tarifs (
   id uuid primary key default gen_random_uuid(),
   section_id uuid not null references sections(id),
   annee_scolaire_id uuid not null references annees_scolaires(id),
-  type text not null check (type in ('INSCRIPTION','MENSUALITE','COTISATION')),
+  type text not null check (type in ('INSCRIPTION','MENSUALITE','BLAUSE','COTISATION')),
   libelle text,
   montant numeric(10,2) not null check (montant >= 0),
-  unique (section_id, annee_scolaire_id, type, libelle)
+  created_at timestamptz not null default now(),
+  unique (section_id, annee_scolaire_id, type)
 );
+create index idx_tarifs_section_annee on tarifs(section_id, annee_scolaire_id);
 
 -- ============================================================================
 -- 5. PARENTS
@@ -128,14 +185,18 @@ create index idx_presences_eleve on presences(eleve_id);
 create table paiements (
   id uuid primary key default gen_random_uuid(),
   eleve_id uuid not null references eleves(id) on delete restrict,
-  type text not null check (type in ('INSCRIPTION','MENSUALITE','COTISATION')),
+  section_id uuid not null references sections(id),
+  annee_scolaire_id uuid not null references annees_scolaires(id),
+  type text not null check (type in ('INSCRIPTION','MENSUALITE','BLAUSE','COTISATION')),
   montant numeric(10,2) not null check (montant > 0),
   mode text not null check (mode in ('ESPECES','WAVE','ORANGE_MONEY')),
   date_paiement date not null default now(),
   enregistre_par uuid not null references profiles(id),
-  commentaire text
+  commentaire text,
+  created_at timestamptz not null default now()
 );
 create index idx_paiements_eleve on paiements(eleve_id);
+create index idx_paiements_section_annee on paiements(section_id, annee_scolaire_id);
 create index idx_paiements_date on paiements(date_paiement);
 
 -- ============================================================================
@@ -164,23 +225,31 @@ select
   i.section_id,
   i.annee_scolaire_id,
   coalesce((
-    select sum(t.montant) from tarifs t
+    select sum(t.montant)
+    from tarifs t
     where t.section_id = i.section_id
       and t.annee_scolaire_id = i.annee_scolaire_id
   ), 0) as total_du,
   coalesce((
-    select sum(p.montant) from paiements p
+    select sum(p.montant)
+    from paiements p
     where p.eleve_id = e.id
+      and p.section_id = i.section_id
+      and p.annee_scolaire_id = i.annee_scolaire_id
   ), 0) as total_paye,
   coalesce((
-    select sum(t.montant) from tarifs t
+    select sum(t.montant)
+    from tarifs t
     where t.section_id = i.section_id
       and t.annee_scolaire_id = i.annee_scolaire_id
   ), 0)
   -
   coalesce((
-    select sum(p.montant) from paiements p
+    select sum(p.montant)
+    from paiements p
     where p.eleve_id = e.id
+      and p.section_id = i.section_id
+      and p.annee_scolaire_id = i.annee_scolaire_id
   ), 0) as reste_a_payer
 from eleves e
 join inscriptions i on i.eleve_id = e.id

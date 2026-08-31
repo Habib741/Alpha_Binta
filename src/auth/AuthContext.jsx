@@ -10,41 +10,69 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   const chargerProfil = useCallback(async (userId) => {
+    setLoading(true);
+
     const { data, error } = await supabase
       .from("profiles")
       .select("*")
       .eq("id", userId)
-      .single();
+      .maybeSingle();
 
-    if (error) {
+    if (error && error.code !== "PGRST116") {
       setProfileError(error);
       setProfile(null);
-    } else {
-      setProfileError(null);
-      setProfile(data);
+      setLoading(false);
+      return;
     }
+
+    if (!data) {
+      setProfileError(new Error("Aucun profil trouvé pour cet utilisateur."));
+      setProfile(null);
+      setLoading(false);
+      return;
+    }
+
+    setProfileError(null);
+    setProfile(data);
+    setLoading(false);
   }, []);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    let isMounted = true;
+
+    const initialiserSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!isMounted) return;
+
       setSession(session);
       if (session?.user) {
-        chargerProfil(session.user.id).finally(() => setLoading(false));
+        await chargerProfil(session.user.id);
       } else {
+        setProfile(null);
+        setProfileError(null);
+        setLoading(false);
+      }
+    };
+
+    initialiserSession();
+
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!isMounted) return;
+
+      setSession(session);
+      if (session?.user) {
+        await chargerProfil(session.user.id);
+      } else {
+        setProfile(null);
+        setProfileError(null);
         setLoading(false);
       }
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      if (session?.user) {
-        chargerProfil(session.user.id);
-      } else {
-        setProfile(null);
-      }
-    });
-
-    return () => listener.subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      listener.subscription.unsubscribe();
+    };
   }, [chargerProfil]);
 
   const seConnecter = async (email, password) => {

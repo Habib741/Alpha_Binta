@@ -1,12 +1,29 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import AppLayout from "../../layout/AppLayout";
 import Loader from "../../components/Loader";
 import EmptyState from "../../components/EmptyState";
 import { useAuth } from "../../auth/AuthContext";
 import { useToast } from "../../components/ToastContext";
-import { listerEleves } from "../../services/elevesService";
-import { soldeTousLesEleves, enregistrerPaiement } from "../../services/paiementsService";
-import { formaterMontant, dateDuJourISO } from "../../utils/format";
+import { listerEleves, listerSections, anneeActive } from "../../services/elevesService";
+import {
+  soldeTousLesEleves,
+  enregistrerPaiement,
+  modifierPaiement,
+  supprimerPaiement,
+  historiquePaiements,
+  listerTarifs,
+  creerTarif,
+  modifierTarif,
+  supprimerTarif,
+} from "../../services/paiementsService";
+import { formaterMontant, dateDuJourISO, formaterDate } from "../../utils/format";
+
+const TYPES_PAIEMENT = [
+  { value: "INSCRIPTION", label: "Inscription" },
+  { value: "MENSUALITE", label: "Mensualité (octobre à juin)" },
+  { value: "BLAUSE", label: "Blouse" },
+  { value: "COTISATION", label: "Cotisation" },
+];
 
 export default function PaiementsPage() {
   const { profile } = useAuth();
@@ -15,9 +32,17 @@ export default function PaiementsPage() {
   const [chargement, setChargement] = useState(true);
   const [soldes, setSoldes] = useState([]);
   const [eleves, setEleves] = useState([]);
+  const [sections, setSections] = useState([]);
+  const [tarifs, setTarifs] = useState([]);
+  const [sectionFiltre, setSectionFiltre] = useState("");
   const [formulaireOuvert, setFormulaireOuvert] = useState(false);
+  const [historique, setHistorique] = useState([]);
   const [envoi, setEnvoi] = useState(false);
+  const [envoiTarif, setEnvoiTarif] = useState(false);
+  const [editingTarifId, setEditingTarifId] = useState(null);
+  const [editingPaiementId, setEditingPaiementId] = useState(null);
   const [form, setForm] = useState({
+    section_id: "",
     eleve_id: "",
     type: "MENSUALITE",
     montant: "",
@@ -25,13 +50,64 @@ export default function PaiementsPage() {
     date_paiement: dateDuJourISO(),
     commentaire: "",
   });
+  const [tarifForm, setTarifForm] = useState({
+    section_id: "",
+    type: "INSCRIPTION",
+    montant: "",
+  });
+
+  const elevesParSection = form.section_id
+    ? eleves.filter((e) => e.inscriptions?.[0]?.section_id === form.section_id)
+    : eleves;
+
+  const soldesFiltres = sectionFiltre
+    ? soldes.filter((s) => s.section_id === sectionFiltre)
+    : soldes;
+
+  const tarifActuel = useMemo(() => {
+    if (!form.section_id || !form.type) return null;
+    return tarifs.find((t) => t.section_id === form.section_id && t.type === form.type) || null;
+  }, [form.section_id, form.type, tarifs]);
+
+  useEffect(() => {
+    if (!form.eleve_id) {
+      setHistorique([]);
+      return;
+    }
+
+    let ignore = false;
+    historiquePaiements(form.eleve_id)
+      .then((data) => {
+        if (!ignore) setHistorique(data || []);
+      })
+      .catch(() => {
+        if (!ignore) setHistorique([]);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [form.eleve_id]);
+
+  useEffect(() => {
+    if (tarifActuel && !form.montant) {
+      setForm((f) => ({ ...f, montant: String(tarifActuel.montant) }));
+    }
+  }, [tarifActuel, form.montant]);
 
   async function charger() {
     setChargement(true);
     try {
-      const [listeSoldes, listeEleves] = await Promise.all([soldeTousLesEleves(), listerEleves()]);
+      const [listeSoldes, listeEleves, listeSections, listeTarifs] = await Promise.all([
+        soldeTousLesEleves(),
+        listerEleves(),
+        listerSections(),
+        listerTarifs(),
+      ]);
       setSoldes(listeSoldes);
       setEleves(listeEleves);
+      setSections(listeSections);
+      setTarifs(listeTarifs);
     } catch (e) {
       notifier("Erreur lors du chargement des paiements.", "error");
     } finally {
@@ -44,25 +120,126 @@ export default function PaiementsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  function reinitialiserTarifForm(sectionId = "") {
+    setEditingTarifId(null);
+    setTarifForm({ section_id: sectionId, type: "INSCRIPTION", montant: "" });
+  }
+
+  function ouvrirEditionTarif(tarif) {
+    setEditingTarifId(tarif.id);
+    setTarifForm({
+      section_id: tarif.section_id,
+      type: tarif.type,
+      montant: String(tarif.montant),
+    });
+  }
+
+  async function supprimerTarifCourant(id) {
+    const tarif = tarifs.find((item) => item.id === id);
+    if (!tarif) return;
+
+    const reponse = window.confirm(`Supprimer le tarif ${labelType(tarif.type)} pour ${tarif.sections?.nom || "cette classe"} ?`);
+    if (!reponse) return;
+
+    try {
+      await supprimerTarif(id);
+      notifier("Tarif supprimé.");
+      reinitialiserTarifForm();
+      await charger();
+    } catch (err) {
+      notifier(err?.message || "Erreur lors de la suppression du tarif.", "error");
+    }
+  }
+
+  async function handleTarifSubmit(e) {
+    e.preventDefault();
+    if (!tarifForm.section_id || !tarifForm.type || !tarifForm.montant) {
+      notifier("La classe, le type et le montant du tarif sont obligatoires.", "error");
+      return;
+    }
+
+    setEnvoiTarif(true);
+    try {
+      const anneeCourante = await anneeActive();
+      if (editingTarifId) {
+        await modifierTarif(editingTarifId, {
+          section_id: tarifForm.section_id,
+          annee_scolaire_id: anneeCourante.id,
+          type: tarifForm.type,
+          montant: Number(tarifForm.montant),
+        });
+        notifier("Tarif modifié.");
+      } else {
+        await creerTarif({
+          section_id: tarifForm.section_id,
+          annee_scolaire_id: anneeCourante.id,
+          type: tarifForm.type,
+          montant: Number(tarifForm.montant),
+        });
+        notifier("Tarif enregistré pour la section.");
+      }
+      reinitialiserTarifForm(tarifForm.section_id);
+      await charger();
+    } catch (err) {
+      notifier(err?.message || "Erreur lors de l'enregistrement du tarif.", "error");
+    } finally {
+      setEnvoiTarif(false);
+    }
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
+    if (!form.section_id || !form.eleve_id) {
+      notifier("Veuillez choisir une classe puis un élève avant d'enregistrer le paiement.", "error");
+      return;
+    }
+
     setEnvoi(true);
     try {
+      const anneeCourante = await anneeActive();
       await enregistrerPaiement({
-        ...form,
+        eleve_id: form.eleve_id,
+        section_id: form.section_id,
+        annee_scolaire_id: anneeCourante.id,
+        type: form.type,
         montant: Number(form.montant),
+        mode: form.mode,
+        date_paiement: form.date_paiement,
+        commentaire: form.commentaire,
         enregistre_par: profile.id,
       });
       notifier("Paiement enregistré.");
       setFormulaireOuvert(false);
-      setForm((f) => ({ ...f, eleve_id: "", montant: "", commentaire: "" }));
-      charger();
+      setForm((f) => ({ ...f, section_id: "", eleve_id: "", montant: "", commentaire: "", type: "MENSUALITE" }));
+      await charger();
     } catch (err) {
-      notifier("Erreur lors de l'enregistrement du paiement.", "error");
+      notifier(err?.message || "Erreur lors de l'enregistrement du paiement.", "error");
     } finally {
       setEnvoi(false);
     }
   }
+
+  async function supprimerPaiementCourant(id) {
+    const paiement = historique.find((item) => item.id === id);
+    if (!paiement) return;
+
+    const reponse = window.confirm(`Supprimer ce paiement de ${labelType(paiement.type)} ?`);
+    if (!reponse) return;
+
+    try {
+      await supprimerPaiement(id);
+      notifier("Paiement supprimé.");
+      await charger();
+      if (form.eleve_id) {
+        const data = await historiquePaiements(form.eleve_id);
+        setHistorique(data || []);
+      }
+    } catch (err) {
+      notifier(err?.message || "Erreur lors de la suppression du paiement.", "error");
+    }
+  }
+
+  const labelType = (type) => TYPES_PAIEMENT.find((item) => item.value === type)?.label || type;
 
   return (
     <AppLayout titre="Paiements">
@@ -73,31 +250,128 @@ export default function PaiementsPage() {
         </button>
       </div>
 
+      <div className="card" style={{ marginBottom: 20 }}>
+        <h3 style={{ marginBottom: 14 }}>Tarifs par classe</h3>
+        <form onSubmit={handleTarifSubmit}>
+          <div className="grid-2">
+            <div className="field">
+              <label>Classe</label>
+              <select value={tarifForm.section_id} onChange={(e) => setTarifForm({ ...tarifForm, section_id: e.target.value })}>
+                <option value="">Choisir une classe…</option>
+                {sections.map((section) => (
+                  <option key={section.id} value={section.id}>{section.nom}</option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label>Type</label>
+              <select value={tarifForm.type} onChange={(e) => setTarifForm({ ...tarifForm, type: e.target.value })}>
+                {TYPES_PAIEMENT.map((type) => (
+                  <option key={type.value} value={type.value}>{type.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label>Montant par défaut (FCFA)</label>
+              <input type="number" min="0" step="100" value={tarifForm.montant} onChange={(e) => setTarifForm({ ...tarifForm, montant: e.target.value })} />
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <button type="submit" className="btn btn-primary" disabled={envoiTarif}>
+              {envoiTarif ? "Enregistrement…" : editingTarifId ? "Enregistrer les modifications" : "Enregistrer le tarif"}
+            </button>
+            {editingTarifId && (
+              <button type="button" className="btn btn-ghost" onClick={() => reinitialiserTarifForm()}>
+                Annuler
+              </button>
+            )}
+          </div>
+        </form>
+
+        <div style={{ marginTop: 18 }}>
+          <h4 style={{ marginBottom: 10 }}>Tarifs enregistrés</h4>
+          {tarifs.length === 0 ? (
+            <p style={{ color: "var(--color-ink-soft)" }}>Aucun tarif enregistré pour le moment.</p>
+          ) : (
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Classe</th>
+                  <th>Type</th>
+                  <th>Montant</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tarifs.map((tarif) => (
+                  <tr key={tarif.id}>
+                    <td>{tarif.sections?.nom || "—"}</td>
+                    <td>{labelType(tarif.type)}</td>
+                    <td className="montant">{formaterMontant(tarif.montant)}</td>
+                    <td>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <button type="button" className="btn btn-ghost" onClick={() => ouvrirEditionTarif(tarif)}>Modifier</button>
+                        <button type="button" className="btn btn-ghost danger" onClick={() => supprimerTarifCourant(tarif.id)}>Supprimer</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
       {formulaireOuvert && (
         <div className="card" style={{ marginBottom: 20 }}>
           <h3 style={{ marginBottom: 14 }}>Nouveau paiement</h3>
           <form onSubmit={handleSubmit}>
             <div className="grid-2">
               <div className="field">
+                <label>Classe</label>
+                <select
+                  required
+                  value={form.section_id}
+                  onChange={(e) => setForm({ ...form, section_id: e.target.value, eleve_id: "", montant: "" })}
+                >
+                  <option value="">Choisir une classe…</option>
+                  {sections.map((section) => (
+                    <option key={section.id} value={section.id}>{section.nom}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
                 <label>Élève</label>
-                <select required value={form.eleve_id} onChange={(e) => setForm({ ...form, eleve_id: e.target.value })}>
-                  <option value="">Choisir…</option>
-                  {eleves.map((e) => (
+                <select
+                  required
+                  value={form.eleve_id}
+                  onChange={(e) => setForm({ ...form, eleve_id: e.target.value })}
+                  disabled={!form.section_id}
+                >
+                  <option value="">Choisir un élève…</option>
+                  {elevesParSection.map((e) => (
                     <option key={e.id} value={e.id}>{e.prenom} {e.nom}</option>
                   ))}
                 </select>
               </div>
               <div className="field">
                 <label>Type</label>
-                <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-                  <option value="INSCRIPTION">Inscription</option>
-                  <option value="MENSUALITE">Mensualité</option>
-                  <option value="COTISATION">Cotisation</option>
+                <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value, montant: "" })}>
+                  {TYPES_PAIEMENT.map((type) => (
+                    <option key={type.value} value={type.value}>{type.label}</option>
+                  ))}
                 </select>
               </div>
               <div className="field">
                 <label>Montant (FCFA)</label>
-                <input required type="number" min="1" value={form.montant} onChange={(e) => setForm({ ...form, montant: e.target.value })} />
+                <input
+                  required
+                  type="number"
+                  min="1"
+                  value={form.montant}
+                  onChange={(e) => setForm({ ...form, montant: e.target.value })}
+                  placeholder={tarifActuel ? String(tarifActuel.montant) : "Montant"}
+                />
               </div>
               <div className="field">
                 <label>Mode de paiement</label>
@@ -111,7 +385,7 @@ export default function PaiementsPage() {
                 <label>Date</label>
                 <input type="date" value={form.date_paiement} onChange={(e) => setForm({ ...form, date_paiement: e.target.value })} />
               </div>
-              <div className="field">
+              <div className="field" style={{ gridColumn: "1 / -1" }}>
                 <label>Commentaire (optionnel)</label>
                 <input value={form.commentaire} onChange={(e) => setForm({ ...form, commentaire: e.target.value })} />
               </div>
@@ -123,12 +397,58 @@ export default function PaiementsPage() {
         </div>
       )}
 
+      {form.eleve_id && (
+        <div className="card" style={{ marginBottom: 20 }}>
+          <h3 style={{ marginBottom: 14 }}>Historique des paiements</h3>
+          {historique.length === 0 ? (
+            <EmptyState titre="Aucun paiement pour cet élève" description="Les paiements enregistrés apparaîtront ici." />
+          ) : (
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Type</th>
+                  <th>Montant</th>
+                  <th>Mode</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {historique.map((paiement) => (
+                  <tr key={paiement.id}>
+                    <td>{formaterDate(paiement.date_paiement)}</td>
+                    <td>{labelType(paiement.type)}</td>
+                    <td className="montant">{formaterMontant(paiement.montant)}</td>
+                    <td>{paiement.mode}</td>
+                    <td>
+                      <button type="button" className="btn btn-ghost danger" onClick={() => supprimerPaiementCourant(paiement.id)}>Supprimer</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
       <div className="card">
-        <h3 style={{ marginBottom: 14 }}>Situation financière des élèves</h3>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
+          <h3 style={{ margin: 0 }}>Situation financière des élèves</h3>
+          <select
+            value={sectionFiltre}
+            onChange={(e) => setSectionFiltre(e.target.value)}
+            style={{ minWidth: 200, padding: "9px 12px", border: "1px solid var(--color-border)", borderRadius: 6 }}
+          >
+            <option value="">Toutes les classes</option>
+            {sections.map((section) => (
+              <option key={section.id} value={section.id}>{section.nom}</option>
+            ))}
+          </select>
+        </div>
         {chargement ? (
           <Loader />
-        ) : soldes.length === 0 ? (
-          <EmptyState titre="Aucune donnée de solde disponible" description="Vérifiez que des tarifs sont définis pour l'année active." />
+        ) : soldesFiltres.length === 0 ? (
+          <EmptyState titre="Aucune donnée de solde disponible" description="Vérifiez que des tarifs sont définis pour l'année active ou choisissez une autre classe." />
         ) : (
           <table className="data-table">
             <thead>
@@ -140,7 +460,7 @@ export default function PaiementsPage() {
               </tr>
             </thead>
             <tbody>
-              {soldes.map((s) => (
+              {soldesFiltres.map((s) => (
                 <tr key={s.eleve_id}>
                   <td>{s.prenom} {s.nom}</td>
                   <td className="montant">{formaterMontant(s.total_du)}</td>

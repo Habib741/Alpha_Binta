@@ -18,10 +18,22 @@ import MesEnfantsPage from "./features/parents/MesEnfantsPage";
 import InformationsPage from "./features/informations-ecole/InformationsPage";
 
 function RedirectionRacine() {
-  const { session, profile, loading } = useAuth();
+  const { session, profile, loading, profileError } = useAuth();
+
   if (loading || session === undefined) return <Loader plein />;
   if (!session) return <Navigate to="/login" replace />;
-  if (!profile) return <Loader plein />;
+  if (profileError || !profile) {
+    return (
+      <div style={{ padding: 40 }}>
+        <h2>Erreur de chargement du profil</h2>
+        <p>
+          Votre compte est authentifié mais aucun profil n'a été trouvé. Contactez
+          l'administration de l'école.
+        </p>
+      </div>
+    );
+  }
+
   return <Navigate to={`/dashboard/${profile.role.toLowerCase()}`} replace />;
 }
 

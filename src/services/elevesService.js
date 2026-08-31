@@ -3,7 +3,7 @@ import { supabase } from "./supabaseClient";
 export async function listerEleves() {
   const { data, error } = await supabase
     .from("eleves")
-    .select("*, inscriptions(section_id, annee_scolaire_id, sections(nom))")
+    .select("*, inscriptions(section_id, annee_scolaire_id, sections(nom), annees_scolaires(libelle))")
     .eq("actif", true)
     .order("nom", { ascending: true });
   if (error) throw error;
