@@ -16,6 +16,8 @@ import MesPaiementsPage from "./features/paiements/MesPaiementsPage";
 import ParentsPage from "./features/parents/ParentsPage";
 import MesEnfantsPage from "./features/parents/MesEnfantsPage";
 import InformationsPage from "./features/informations-ecole/InformationsPage";
+import NotesPage from "./features/notes/NotesPage";
+import MesNotesPage from "./features/notes/MesNotesPage";
 
 function RedirectionRacine() {
   const { session, profile, loading, profileError } = useAuth();
@@ -109,6 +111,14 @@ export default function App() {
         }
       />
       <Route
+        path="/notes"
+        element={
+          <ProtectedRoute rolesAutorises={["DIRECTRICE", "ENSEIGNANT"]}>
+            <NotesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/mes-enfants"
         element={
           <ProtectedRoute rolesAutorises={["PARENT"]}>
@@ -121,6 +131,14 @@ export default function App() {
         element={
           <ProtectedRoute rolesAutorises={["PARENT"]}>
             <MesPaiementsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/mes-notes"
+        element={
+          <ProtectedRoute rolesAutorises={["PARENT"]}>
+            <MesNotesPage />
           </ProtectedRoute>
         }
       />

@@ -4,7 +4,12 @@ import Loader from "../../components/Loader";
 import EmptyState from "../../components/EmptyState";
 import { useAuth } from "../../auth/AuthContext";
 import { useToast } from "../../components/ToastContext";
-import { listerInformations, publierInformation } from "../../services/informationsService";
+import {
+  listerInformations,
+  publierInformation,
+  modifierInformation,
+  supprimerInformation,
+} from "../../services/informationsService";
 import { formaterDate } from "../../utils/format";
 
 export default function InformationsPage() {
@@ -16,6 +21,7 @@ export default function InformationsPage() {
   const [infos, setInfos] = useState([]);
   const [formulaireOuvert, setFormulaireOuvert] = useState(false);
   const [form, setForm] = useState({ titre: "", contenu: "", visible: true });
+  const [informationEnCours, setInformationEnCours] = useState(null);
   const [envoi, setEnvoi] = useState(false);
 
   async function charger() {
@@ -33,13 +39,59 @@ export default function InformationsPage() {
     e.preventDefault();
     setEnvoi(true);
     try {
-      await publierInformation({ ...form, auteur_id: profile.id });
-      notifier("Information publiée.");
+      if (informationEnCours) {
+        await modifierInformation(informationEnCours.id, form);
+        notifier(form.visible ? "Information publiée." : "Brouillon enregistré.");
+      } else {
+        await publierInformation({ ...form, auteur_id: profile.id });
+        notifier(form.visible ? "Information publiée." : "Brouillon enregistré.");
+      }
       setForm({ titre: "", contenu: "", visible: true });
+      setInformationEnCours(null);
       setFormulaireOuvert(false);
-      charger();
+      await charger();
+    } catch (err) {
+      notifier("Erreur lors de l'enregistrement.", "error");
+    } finally {
+      setEnvoi(false);
+    }
+  }
+
+  function ouvrirEdition(info) {
+    setInformationEnCours(info);
+    setForm({ titre: info.titre, contenu: info.contenu, visible: info.visible });
+    setFormulaireOuvert(true);
+  }
+
+  function annulerEdition() {
+    setInformationEnCours(null);
+    setForm({ titre: "", contenu: "", visible: true });
+    setFormulaireOuvert(false);
+  }
+
+  async function publierBrouillon(info) {
+    setEnvoi(true);
+    try {
+      await modifierInformation(info.id, { visible: true });
+      notifier("Information publiée.");
+      await charger();
     } catch (err) {
       notifier("Erreur lors de la publication.", "error");
+    } finally {
+      setEnvoi(false);
+    }
+  }
+
+  async function supprimer(info) {
+    if (!window.confirm(`Supprimer l'information « ${info.titre} » ?`)) return;
+
+    setEnvoi(true);
+    try {
+      await supprimerInformation(info.id);
+      notifier("Information supprimée.");
+      await charger();
+    } catch (err) {
+      notifier("Erreur lors de la suppression.", "error");
     } finally {
       setEnvoi(false);
     }
@@ -50,14 +102,15 @@ export default function InformationsPage() {
       <div className="page-header">
         <h1>Informations école</h1>
         {estDirectrice && (
-          <button className="btn btn-accent" onClick={() => setFormulaireOuvert((v) => !v)}>
-            {formulaireOuvert ? "Annuler" : "+ Publier une information"}
+          <button className="btn btn-accent" onClick={formulaireOuvert ? annulerEdition : () => setFormulaireOuvert(true)}>
+            {formulaireOuvert ? "Annuler" : "+ Nouvelle information"}
           </button>
         )}
       </div>
 
       {formulaireOuvert && (
         <div className="card" style={{ marginBottom: 20 }}>
+          <h3 style={{ marginBottom: 14 }}>{informationEnCours ? "Modifier l'information" : "Nouvelle information"}</h3>
           <form onSubmit={handleSubmit}>
             <div className="field">
               <label>Titre</label>
@@ -77,7 +130,7 @@ export default function InformationsPage() {
               <label htmlFor="visible" style={{ margin: 0 }}>Publier immédiatement (sinon reste en brouillon)</label>
             </div>
             <button type="submit" className="btn btn-primary" disabled={envoi}>
-              {envoi ? "Publication…" : "Publier"}
+              {envoi ? "Enregistrement…" : form.visible ? "Publier" : "Enregistrer comme brouillon"}
             </button>
           </form>
         </div>
@@ -98,6 +151,21 @@ export default function InformationsPage() {
             <div style={{ fontSize: 12.5, color: "var(--color-ink-faint)", marginTop: 8 }}>
               {formaterDate(info.date_publication)}
             </div>
+            {estDirectrice && (
+              <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+                <button className="btn btn-ghost" onClick={() => ouvrirEdition(info)} disabled={envoi}>
+                  Modifier
+                </button>
+                {!info.visible && (
+                  <button className="btn btn-primary" onClick={() => publierBrouillon(info)} disabled={envoi}>
+                    Publier
+                  </button>
+                )}
+                <button className="btn btn-ghost" onClick={() => supprimer(info)} disabled={envoi}>
+                  Supprimer
+                </button>
+              </div>
+            )}
           </div>
         ))
       )}

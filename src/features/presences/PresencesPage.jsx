@@ -20,6 +20,7 @@ export default function PresencesPage() {
   const [eleves, setEleves] = useState([]);
   const [chargement, setChargement] = useState(false);
   const [enregistrement, setEnregistrement] = useState({});
+  const estWeekend = [0, 6].includes(new Date(`${date}T00:00:00`).getDay());
 
   useEffect(() => {
     async function init() {
@@ -92,7 +93,9 @@ export default function PresencesPage() {
       </div>
 
       <div className="card">
-        {chargement ? (
+        {estWeekend ? (
+          <EmptyState titre="Aucun appel le week-end" description="Les samedis et dimanches restent sans pointage." />
+        ) : chargement ? (
           <Loader />
         ) : eleves.length === 0 ? (
           <EmptyState titre="Aucun élève inscrit dans cette section" />
@@ -104,14 +107,14 @@ export default function PresencesPage() {
                 <div className="appel-toggle">
                   <button
                     className={e.statut === "PRESENT" ? "present-selected" : ""}
-                    disabled={enregistrement[e.id]}
+                    disabled={enregistrement[e.id] || estWeekend}
                     onClick={() => marquer(e.id, "PRESENT")}
                   >
                     Présent(e)
                   </button>
                   <button
                     className={e.statut === "ABSENT" ? "absent-selected" : ""}
-                    disabled={enregistrement[e.id]}
+                    disabled={enregistrement[e.id] || estWeekend}
                     onClick={() => marquer(e.id, "ABSENT")}
                   >
                     Absent(e)

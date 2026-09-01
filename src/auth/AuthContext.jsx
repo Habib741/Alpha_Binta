@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "../services/supabaseClient";
 
 const AuthContext = createContext(null);
@@ -8,8 +8,10 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null);
   const [profileError, setProfileError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const requeteProfil = useRef(0);
 
   const chargerProfil = useCallback(async (userId) => {
+    const numeroRequete = ++requeteProfil.current;
     setLoading(true);
 
     const { data, error } = await supabase
@@ -17,6 +19,8 @@ export function AuthProvider({ children }) {
       .select("*")
       .eq("id", userId)
       .maybeSingle();
+
+    if (numeroRequete !== requeteProfil.current) return;
 
     if (error && error.code !== "PGRST116") {
       setProfileError(error);

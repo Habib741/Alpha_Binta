@@ -31,6 +31,16 @@ export async function elevesPourAppel(sectionId, anneeScolaireId, date) {
 }
 
 export async function enregistrerPresence({ eleve_id, date, statut, enregistre_par }) {
+  if (!["PRESENT", "ABSENT"].includes(statut)) {
+    throw new Error("Le statut de présence est invalide.");
+  }
+
+  const [annee, mois, jour] = String(date).split("-").map(Number);
+  const dateLocale = new Date(annee, mois - 1, jour);
+  if ([0, 6].includes(dateLocale.getDay())) {
+    throw new Error("Les présences ne sont pas enregistrées le week-end.");
+  }
+
   const { data, error } = await supabase
     .from("presences")
     .upsert({ eleve_id, date, statut, enregistre_par }, { onConflict: "eleve_id,date" })

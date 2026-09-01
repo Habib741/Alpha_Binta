@@ -252,6 +252,164 @@ textarea {
   gap: 18px 20px;
 }
 
+.presence-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.presence-calendar-heading {
+  padding: 6px 4px;
+  color: var(--color-ink-faint);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.presence-calendar-day {
+  min-height: 64px;
+  padding: 8px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+  text-align: center;
+}
+
+.presence-calendar-day span {
+  display: block;
+  font-weight: 700;
+}
+
+.presence-calendar-day small {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+}
+
+.presence-calendar-day.present {
+  background: var(--color-success-soft);
+  border-color: var(--color-success);
+  color: var(--color-success);
+}
+
+.presence-calendar-day.absent {
+  background: var(--color-danger-soft);
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.presence-calendar-day.weekend {
+  background: #eeeeee;
+  border-color: #d3d3d3;
+  color: #777777;
+}
+
+.presence-calendar-day.empty {
+  visibility: hidden;
+  border: 0;
+}
+
+.child-panel-heading {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.child-panel-heading > span:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.child-panel-heading strong {
+  color: var(--color-primary);
+  font-size: 17px;
+}
+
+.child-panel-heading small {
+  color: var(--color-ink-faint);
+  font-size: 13px;
+}
+
+.child-panel-heading .btn {
+  max-width: 100%;
+  text-align: center;
+}
+
+.child-panel-content {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--color-border);
+}
+
+@media (max-width: 760px) {
+  .child-panel-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .child-panel-heading .btn {
+    align-self: flex-start;
+  }
+}
+
+.presence-legend {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  margin-right: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  vertical-align: -1px;
+}
+
+.presence-present { background: var(--color-success-soft); border-color: var(--color-success); }
+.presence-absent { background: var(--color-danger-soft); border-color: var(--color-danger); }
+.presence-weekend { background: #eeeeee; border-color: #d3d3d3; }
+.presence-empty { background: var(--color-surface-raised); }
+
+.notes-table th,
+.notes-table td {
+  vertical-align: middle;
+}
+
+.note-input {
+  width: 92px;
+  padding: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+}
+
+.note-cell {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--color-ink-faint);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.note-delete {
+  margin-left: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--color-danger);
+  cursor: pointer;
+}
+
+.badge button {
+  margin-left: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
 @media (max-width: 760px) {
   .grid-2 {
     grid-template-columns: 1fr;

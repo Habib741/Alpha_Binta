@@ -10,13 +10,19 @@ export async function listerParents() {
 }
 
 export async function listerEnfantsDisponibles() {
-  const { data, error } = await supabase
+  const [{ data, error }, { data: liens, error: liensError }] = await Promise.all([
+    supabase
     .from("eleves")
     .select("id, prenom, nom, actif, inscriptions(section_id, sections(nom))")
     .eq("actif", true)
-    .order("nom", { ascending: true });
+    .order("nom", { ascending: true }),
+    supabase.from("parents_eleves").select("eleve_id"),
+  ]);
   if (error) throw error;
-  return data;
+  if (liensError) throw liensError;
+
+  const enfantsDejaLies = new Set((liens ?? []).map((lien) => lien.eleve_id));
+  return (data ?? []).filter((eleve) => !enfantsDejaLies.has(eleve.id));
 }
 
 export async function creerCompteParent({ prenom, nom, telephone, email, adresse, mot_de_passe, enfants = [] }) {
@@ -45,6 +51,16 @@ export async function creerCompteParent({ prenom, nom, telephone, email, adresse
   const userId = authData?.user?.id;
   if (!userId) {
     throw new Error("La création du compte parent a échoué : aucun utilisateur n’a été renvoyé par Supabase.");
+  }
+
+  if (sessionDirectrice?.user?.id && sessionDirectrice.user.id !== userId) {
+    const { error: restaurationError } = await supabase.auth.setSession({
+      access_token: sessionDirectrice.access_token,
+      refresh_token: sessionDirectrice.refresh_token,
+    });
+    if (restaurationError) throw restaurationError;
+  } else if (!sessionDirectrice) {
+    await supabase.auth.signOut();
   }
 
   const { data: profileData, error: profileError } = await supabase
@@ -78,15 +94,6 @@ export async function creerCompteParent({ prenom, nom, telephone, email, adresse
 
   if (parentError) throw parentError;
 
-  if (sessionDirectrice?.user?.id && sessionDirectrice.user.id !== userId) {
-    await supabase.auth.setSession({
-      access_token: sessionDirectrice.access_token,
-      refresh_token: sessionDirectrice.refresh_token,
-    });
-  } else if (!sessionDirectrice) {
-    await supabase.auth.signOut();
-  }
-
   if (enfants.length > 0) {
     const liens = enfants.map((eleveId) => ({
       parent_id: parentData.id,
@@ -110,7 +117,7 @@ export async function creerCompteParent({ prenom, nom, telephone, email, adresse
 export async function mesEnfants() {
   const { data, error } = await supabase
     .from("eleves")
-    .select("*, inscriptions(section_id, annee_scolaire_id, sections(nom))")
+    .select("*, inscriptions(section_id, annee_scolaire_id, date_inscription, sections(nom), annees_scolaires(libelle)), documents_enfants(*)")
     .eq("actif", true);
   if (error) throw error;
   return data;

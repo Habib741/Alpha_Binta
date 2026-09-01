@@ -157,7 +157,8 @@ create table parents_eleves (
   parent_id uuid not null references parents(id) on delete restrict,
   eleve_id uuid not null references eleves(id) on delete restrict,
   lien text,
-  unique (parent_id, eleve_id)
+  unique (parent_id, eleve_id),
+  unique (eleve_id)
 );
 create index idx_parents_eleves_eleve on parents_eleves(eleve_id);
 create index idx_parents_eleves_parent on parents_eleves(parent_id);
@@ -214,7 +215,45 @@ create table informations_ecole (
 create index idx_infos_ecole_date on informations_ecole(date_publication desc);
 
 -- ============================================================================
--- 9. VUE — SOLDE PAR ÉLÈVE (total dû / payé / reste, pour l'année active)
+-- 9. MATIERES, COMPOSITIONS ET NOTES
+-- ============================================================================
+
+create table matieres (
+  id uuid primary key default gen_random_uuid(),
+  section_id uuid not null references sections(id) on delete cascade,
+  nom text not null,
+  ordre smallint not null default 1,
+  created_at timestamptz not null default now(),
+  unique (section_id, nom)
+);
+
+create table compositions (
+  id uuid primary key default gen_random_uuid(),
+  section_id uuid not null references sections(id) on delete cascade,
+  annee_scolaire_id uuid not null references annees_scolaires(id) on delete restrict,
+  libelle text not null default 'Composition 1',
+  statut text not null default 'BROUILLON' check (statut in ('BROUILLON','PUBLIEE')),
+  creee_par uuid not null references profiles(id),
+  created_at timestamptz not null default now(),
+  unique (section_id, annee_scolaire_id)
+);
+
+create table notes (
+  id uuid primary key default gen_random_uuid(),
+  composition_id uuid not null references compositions(id) on delete cascade,
+  eleve_id uuid not null references eleves(id) on delete cascade,
+  matiere_id uuid not null references matieres(id) on delete cascade,
+  valeur numeric(5,2) not null check (valeur >= 0 and valeur <= 20),
+  commentaire text,
+  saisie_par uuid not null references profiles(id),
+  updated_at timestamptz not null default now(),
+  unique (composition_id, eleve_id, matiere_id)
+);
+create index idx_matieres_section on matieres(section_id, ordre);
+create index idx_notes_eleve on notes(eleve_id);
+
+-- ============================================================================
+-- 10. VUE — SOLDE PAR ÉLÈVE (total dû / payé / reste, pour l'année active)
 -- ============================================================================
 
 create or replace view vue_solde_eleve as
@@ -320,6 +359,10 @@ alter table parents_eleves enable row level security;
 alter table presences enable row level security;
 alter table paiements enable row level security;
 alter table informations_ecole enable row level security;
+alter table documents_enfants enable row level security;
+alter table matieres enable row level security;
+alter table compositions enable row level security;
+alter table notes enable row level security;
 
 -- ============================================================================
 -- 13. POLITIQUES RLS
@@ -443,6 +486,64 @@ create policy infos_update on informations_ecole for update
 using (mon_role() = 'DIRECTRICE');
 create policy infos_delete on informations_ecole for delete
 using (mon_role() = 'DIRECTRICE');
+
+-- DOCUMENTS ENFANTS
+create policy documents_enfants_select_staff on documents_enfants for select
+using (mon_role() in ('DIRECTRICE','ENSEIGNANT'));
+create policy documents_enfants_select_parent on documents_enfants for select
+using (mon_role() = 'PARENT' and est_mon_enfant(eleve_id));
+create policy documents_enfants_insert on documents_enfants for insert
+with check (mon_role() = 'DIRECTRICE');
+create policy documents_enfants_update on documents_enfants for update
+using (mon_role() = 'DIRECTRICE');
+create policy documents_enfants_delete on documents_enfants for delete
+using (mon_role() = 'DIRECTRICE');
+
+-- MATIERES, COMPOSITIONS ET NOTES
+create policy matieres_select on matieres for select
+using (auth.uid() is not null);
+create policy matieres_insert_staff on matieres for insert
+with check (mon_role() in ('DIRECTRICE','ENSEIGNANT'));
+create policy matieres_update_staff on matieres for update
+using (mon_role() in ('DIRECTRICE','ENSEIGNANT'));
+create policy matieres_delete_staff on matieres for delete
+using (mon_role() in ('DIRECTRICE','ENSEIGNANT'));
+
+create policy compositions_select_staff on compositions for select
+using (mon_role() in ('DIRECTRICE','ENSEIGNANT'));
+create policy compositions_select_parent on compositions for select
+using (mon_role() = 'PARENT' and statut = 'PUBLIEE' and exists (
+  select 1 from inscriptions i
+  join parents_eleves pe on pe.eleve_id = i.eleve_id
+  join parents p on p.id = pe.parent_id
+  where i.section_id = compositions.section_id
+    and i.annee_scolaire_id = compositions.annee_scolaire_id
+    and p.profile_id = auth.uid()
+));
+create policy compositions_insert_staff on compositions for insert
+with check (mon_role() in ('DIRECTRICE','ENSEIGNANT'));
+create policy compositions_update_staff on compositions for update
+using (mon_role() in ('DIRECTRICE','ENSEIGNANT'));
+create policy compositions_delete_staff on compositions for delete
+using (mon_role() in ('DIRECTRICE','ENSEIGNANT'));
+
+create policy notes_select_staff on notes for select
+using (mon_role() in ('DIRECTRICE','ENSEIGNANT'));
+create policy notes_select_parent on notes for select
+using (mon_role() = 'PARENT' and exists (
+  select 1 from compositions c
+  join parents_eleves pe on pe.eleve_id = notes.eleve_id
+  join parents p on p.id = pe.parent_id
+  where c.id = notes.composition_id
+    and c.statut = 'PUBLIEE'
+    and p.profile_id = auth.uid()
+));
+create policy notes_insert_staff on notes for insert
+with check (mon_role() in ('DIRECTRICE','ENSEIGNANT'));
+create policy notes_update_staff on notes for update
+using (mon_role() in ('DIRECTRICE','ENSEIGNANT'));
+create policy notes_delete_staff on notes for delete
+using (mon_role() in ('DIRECTRICE','ENSEIGNANT'));
 
 -- ============================================================================
 -- 14. DONNÉES DE RÉFÉRENCE INITIALES

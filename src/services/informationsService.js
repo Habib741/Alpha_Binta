@@ -29,3 +29,11 @@ export async function modifierInformation(id, changements) {
   if (error) throw error;
   return data;
 }
+
+export async function supprimerInformation(id) {
+  const { error } = await supabase
+    .from("informations_ecole")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
+}
