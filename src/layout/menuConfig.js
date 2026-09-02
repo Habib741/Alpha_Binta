@@ -6,6 +6,7 @@ export const menuConfig = {
     { label: "Notes", to: "/notes", icon: "📝" },
     { label: "Paiements", to: "/paiements", icon: "💳" },
     { label: "Parents", to: "/parents", icon: "👪" },
+    { label: "Enseignants", to: "/enseignants", icon: "👩‍🏫" },
     { label: "Informations école", to: "/informations", icon: "📣" },
     { label: "Emploi du temps", to: "/emploi-du-temps", icon: "🗓️" },
     { label: "Mon profil", to: "/profil", icon: "⚙️" },

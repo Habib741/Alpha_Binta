@@ -19,6 +19,7 @@ const InformationsPage = lazy(() => import("./features/informations-ecole/Inform
 const NotesPage = lazy(() => import("./features/notes/NotesPage"));
 const MesNotesPage = lazy(() => import("./features/notes/MesNotesPage"));
 const EmploiDuTempsPage = lazy(() => import("./features/emploi-du-temps/EmploiDuTempsPage"));
+const EnseignantsPage = lazy(() => import("./features/enseignants/EnseignantsPage"));
 
 function RedirectionRacine() {
   const { session, profile, loading, profileError } = useAuth();
@@ -101,6 +102,14 @@ export default function App() {
         element={
           <ProtectedRoute rolesAutorises={["DIRECTRICE"]}>
             <ParentsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/enseignants"
+        element={
+          <ProtectedRoute rolesAutorises={["DIRECTRICE"]}>
+            <EnseignantsPage />
           </ProtectedRoute>
         }
       />
