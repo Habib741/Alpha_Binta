@@ -41,6 +41,17 @@ export async function creerInscription(inscription) {
   return data;
 }
 
+export async function modifierInscription(id, changements) {
+  const { data, error } = await supabase
+    .from("inscriptions")
+    .update(changements)
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 export async function listerSections() {
   const { data, error } = await supabase.from("sections").select("*").order("ordre");
   if (error) throw error;

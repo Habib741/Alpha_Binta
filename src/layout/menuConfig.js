@@ -7,6 +7,7 @@ export const menuConfig = {
     { label: "Paiements", to: "/paiements", icon: "💳" },
     { label: "Parents", to: "/parents", icon: "👪" },
     { label: "Informations école", to: "/informations", icon: "📣" },
+    { label: "Emploi du temps", to: "/emploi-du-temps", icon: "🗓️" },
     { label: "Mon profil", to: "/profil", icon: "⚙️" },
   ],
   ENSEIGNANT: [
@@ -14,6 +15,7 @@ export const menuConfig = {
     { label: "Élèves", to: "/eleves", icon: "🧒" },
     { label: "Présences", to: "/presences", icon: "📋" },
     { label: "Notes", to: "/notes", icon: "📝" },
+    { label: "Emploi du temps", to: "/emploi-du-temps", icon: "🗓️" },
     { label: "Mon profil", to: "/profil", icon: "⚙️" },
   ],
   PARENT: [
@@ -22,6 +24,7 @@ export const menuConfig = {
     { label: "Paiements", to: "/mes-paiements", icon: "💳" },
     { label: "Notes", to: "/mes-notes", icon: "📝" },
     { label: "Informations école", to: "/informations", icon: "📣" },
+    { label: "Emploi du temps", to: "/emploi-du-temps", icon: "🗓️" },
     { label: "Mon profil", to: "/profil", icon: "⚙️" },
   ],
 };

@@ -1,5 +1,4 @@
-import { useEffect, useState, useRef } from "react";
-import * as XLSX from "xlsx";
+import { useEffect, useState } from "react";
 import AppLayout from "../../layout/AppLayout";
 import Loader from "../../components/Loader";
 import EmptyState from "../../components/EmptyState";
@@ -9,13 +8,14 @@ import {
   listerEleves,
   creerEleve,
   creerInscription,
+  modifierInscription,
   listerSections,
   listerAnneesScolaires,
   modifierEleve,
   desactiverEleve,
 } from "../../services/elevesService";
 import { formaterDate } from "../../utils/format";
-import { DOC_TYPES, televerserDocumentEleve, listerDocumentsEleve } from "../../services/documentsService";
+import { DOC_TYPES, televerserDocumentEleve, listerDocumentsEleve, obtenirUrlDocument } from "../../services/documentsService";
 
 export default function ElevesPage() {
   const { profile } = useAuth();
@@ -33,8 +33,6 @@ export default function ElevesPage() {
   const [eleveSelectionne, setEleveSelectionne] = useState(null);
   const [documents, setDocuments] = useState([]);
   const [editingId, setEditingId] = useState(null);
-  const inputExcelRef = useRef(null);
-
   const [form, setForm] = useState({
     prenom: "",
     nom: "",
@@ -71,17 +69,22 @@ export default function ElevesPage() {
       ["adresse", "L'adresse de l'enfant est obligatoire."],
       ["section_id", "La section est obligatoire."],
       ["annee_scolaire_id", "L'année scolaire est obligatoire."],
-      ["photo_identite_1", "La photo d'identité 1 est obligatoire."],
-      ["photo_identite_2", "La photo d'identité 2 est obligatoire."],
       ["parent_nom", "Le prénom(s) et nom du parent / tuteur sont obligatoires."],
       ["parent_adresse", "L'adresse du parent / tuteur est obligatoire."],
       ["parent_telephone", "Le(s) téléphone(s) du parent / tuteur sont obligatoires."],
       ["personne_nom", "Le prénom(s) et nom de la personne autorisée sont obligatoires."],
       ["personne_adresse", "L'adresse de la personne autorisée est obligatoire."],
       ["personne_telephone", "Le(s) téléphone(s) de la personne autorisée sont obligatoires."],
-      ["extrait_naissance", "L'extrait de naissance est obligatoire."],
-      ["document_cni_parent", "La copie de la CNI ou du passeport du parent est obligatoire dans les documents."],
     ];
+
+    if (!editingId) {
+      champsObligatoires.push(
+        ["photo_identite_1", "La photo d'identité 1 est obligatoire."],
+        ["photo_identite_2", "La photo d'identité 2 est obligatoire."],
+        ["extrait_naissance", "L'extrait de naissance est obligatoire."],
+        ["document_cni_parent", "La copie de la CNI ou du passeport du parent est obligatoire dans les documents."]
+      );
+    }
 
     for (const [champ, message] of champsObligatoires) {
       if (!form[champ] || !String(form[champ]).trim()) {
@@ -195,12 +198,8 @@ export default function ElevesPage() {
     setEleveSelectionne(eleve);
     try {
       const listeDocuments = await listerDocumentsEleve(eleve.id);
-      const baseUrl = import.meta.env.VITE_SUPABASE_URL || "";
       const documentsAvecUrl = (listeDocuments || []).map((doc) => {
-        const publicUrl = doc.chemin_storage && baseUrl
-          ? `${baseUrl}/storage/v1/object/public/documents-enfants/${encodeURIComponent(doc.chemin_storage)}`
-          : "";
-        return { ...doc, publicUrl };
+        return { ...doc, publicUrl: obtenirUrlDocument(doc.chemin_storage) };
       });
       setDocuments(documentsAvecUrl);
     } catch (err) {
@@ -251,8 +250,7 @@ export default function ElevesPage() {
 
         const inscriptionExistante = eleves.find((eleve) => eleve.id === editingId)?.inscriptions?.[0];
         if (inscriptionExistante && (inscriptionExistante.section_id !== form.section_id || inscriptionExistante.annee_scolaire_id !== form.annee_scolaire_id)) {
-          await creerInscription({
-            eleve_id: editingId,
+          await modifierInscription(inscriptionExistante.id, {
             section_id: form.section_id,
             annee_scolaire_id: form.annee_scolaire_id,
           });
@@ -332,130 +330,6 @@ export default function ElevesPage() {
     }
   }
 
-  function normaliserTexte(val) {
-    return String(val ?? "")
-      .trim()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/\s+/g, " ")
-      .toLowerCase();
-  }
-
-  function trouverSectionIdDepuisNom(sectionLabel) {
-    if (!sectionLabel) return "";
-    const libelle = normaliserTexte(sectionLabel);
-    const section = sections.find((s) => normaliserTexte(s.nom) === libelle || normaliserTexte(s.nom).includes(libelle) || libelle.includes(normaliserTexte(s.nom)));
-    return section?.id ?? "";
-  }
-
-  function parseDateImport(value) {
-    if (value === null || value === undefined || String(value).trim() === "") return "";
-
-    if (typeof value === "number") {
-      const date = XLSX.SSF.parse_date_code(value);
-      if (date) {
-        const year = String(date.y).padStart(4, "0");
-        const month = String(date.m + 1).padStart(2, "0");
-        const day = String(date.d).padStart(2, "0");
-        return `${year}-${month}-${day}`;
-      }
-      return "";
-    }
-
-    const raw = String(value).trim();
-
-    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
-    if (/^\d{2}[/-]\d{2}[/-]\d{4}$/.test(raw)) {
-      const [jour, mois, annee] = raw.split(/[/-]/);
-      return `${annee}-${mois.padStart(2, "0")}-${jour.padStart(2, "0")}`;
-    }
-    if (/^\d{4}[/-]\d{1,2}[/-]\d{1,2}$/.test(raw)) {
-      const [annee, mois, jour] = raw.split(/[/-]/);
-      return `${annee}-${mois.padStart(2, "0")}-${jour.padStart(2, "0")}`;
-    }
-
-    const date = new Date(raw.replace(/\//g, "-"));
-    if (!Number.isNaN(date.getTime())) {
-      return date.toISOString().slice(0, 10);
-    }
-
-    return "";
-  }
-
-  function extraireValeur(row, labels) {
-    const candidates = labels.map((label) => normaliserTexte(label));
-    for (const [key, value] of Object.entries(row)) {
-      if (candidates.includes(normaliserTexte(key))) return value;
-    }
-    return "";
-  }
-
-  async function handleImportExcel(event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    try {
-      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
-      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: "" });
-
-      if (!rows.length) {
-        throw new Error("Le fichier Excel est vide.");
-      }
-
-      let ajoutes = 0;
-      const erreurs = [];
-
-      for (const row of rows) {
-        const prenom = String(extraireValeur(row, ["prenom", "prénom", "first name", "first_name"]) ?? "").trim();
-        const nom = String(extraireValeur(row, ["nom", "last name", "last_name"]) ?? "").trim();
-        const sexeBrut = String(extraireValeur(row, ["sexe", "genre"]) ?? "").trim();
-        const dateNaissance = parseDateImport(extraireValeur(row, ["date_naissance", "date de naissance", "date de Naissance", "dob", "birthdate"]));
-        const sectionLabel = String(extraireValeur(row, ["section", "classe", "section_nom", "nom_section"]) ?? "").trim();
-
-        if (!prenom || !nom || !dateNaissance || !sexeBrut || !sectionLabel) {
-          erreurs.push("Une ligne du fichier est incomplète (prénom, nom, date, sexe ou section manquant).");
-          continue;
-        }
-
-        const sexe = ["m", "masculin", "male"].includes(normaliserTexte(sexeBrut)) ? "M" : ["f", "feminin", "female", "féminin"].includes(normaliserTexte(sexeBrut)) ? "F" : "";
-        const sectionId = trouverSectionIdDepuisNom(sectionLabel);
-
-        if (!sexe || !sectionId) {
-          erreurs.push(`Le sexe ou la section n'est pas valide pour : ${prenom} ${nom}`);
-          continue;
-        }
-
-        const eleve = await creerEleve({
-          prenom,
-          nom,
-          date_naissance: dateNaissance,
-          sexe,
-        });
-
-        await creerInscription({
-          eleve_id: eleve.id,
-          section_id: sectionId,
-          annee_scolaire_id: form.annee_scolaire_id,
-        });
-
-        ajoutes += 1;
-      }
-
-      if (ajoutes > 0) {
-        notifier(`${ajoutes} élève(s) importé(s) avec succès.`);
-      }
-      if (erreurs.length > 0) {
-        notifier(erreurs[0], "error");
-      }
-
-      event.target.value = "";
-      await chargerDonnees();
-    } catch (err) {
-      notifier(err?.message || "Erreur lors de l'import Excel.", "error");
-    }
-  }
-
   return (
     <AppLayout titre="Élèves">
       <div className="page-header">
@@ -465,16 +339,6 @@ export default function ElevesPage() {
             <button className="btn btn-accent" onClick={() => setFormulaireOuvert((v) => !v)}>
               {formulaireOuvert ? "Annuler" : "+ Ajouter un élève"}
             </button>
-            <button className="btn btn-ghost" onClick={() => inputExcelRef.current?.click()}>
-              Importer Excel
-            </button>
-            <input
-              ref={inputExcelRef}
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              style={{ display: "none" }}
-              onChange={handleImportExcel}
-            />
           </div>
         )}
       </div>
@@ -645,8 +509,19 @@ export default function ElevesPage() {
       )}
 
       {eleveSelectionne && (
-        <div className="card info-panel" style={{ marginBottom: 20 }}>
+        <div className="modal-backdrop" onClick={() => setEleveSelectionne(null)}>
+          <div className="card info-panel modal-content child-modal-content" onClick={(e) => e.stopPropagation()}>
           <div className="panel-header">
+            <div>
+              {(() => {
+                const photo = documents.find((doc) => doc.type_document === DOC_TYPES.PHOTO_IDENTITE_1);
+                return photo?.publicUrl ? (
+                  <img className="child-photo" src={photo.publicUrl} alt={`Photo de ${eleveSelectionne.prenom} ${eleveSelectionne.nom}`} />
+                ) : (
+                  <div className="child-photo child-photo-placeholder" aria-label="Photo non disponible">{eleveSelectionne.prenom?.charAt(0)}</div>
+                );
+              })()}
+            </div>
             <div>
               <h3>{eleveSelectionne.prenom} {eleveSelectionne.nom}</h3>
               <p>{eleveSelectionne.inscriptions?.[0]?.sections?.nom ?? "Section non définie"}</p>
@@ -654,6 +529,7 @@ export default function ElevesPage() {
             <div className="action-group">
               <button className="btn btn-ghost" onClick={() => ouvrirEdition(eleveSelectionne)} type="button">Modifier</button>
               <button className="btn btn-ghost danger" onClick={() => supprimerEleve(eleveSelectionne.id)} type="button">Supprimer</button>
+              <button className="btn btn-ghost" onClick={() => setEleveSelectionne(null)} type="button">Fermer</button>
             </div>
           </div>
 
@@ -680,18 +556,11 @@ export default function ElevesPage() {
                 <div className="document-list">
                   {documents.map((doc) => (
                     <div key={doc.id} className="document-item">
-                      <div className="document-preview">
-                        {doc.publicUrl && /^image\//i.test(doc.mime_type || "") ? (
-                          <img src={doc.publicUrl} alt={libelleTypeDocument(doc.type_document)} />
-                        ) : (
-                          <div className="document-fallback">PDF / fichier</div>
-                        )}
-                      </div>
                       <div className="document-meta">
                         <strong>{libelleTypeDocument(doc.type_document)}</strong>
                         <small>{doc.nom_fichier}</small>
                         {doc.publicUrl && (
-                          <a href={doc.publicUrl} target="_blank" rel="noreferrer">Ouvrir</a>
+                          <a className="btn btn-ghost" href={doc.publicUrl} target="_blank" rel="noreferrer">Ouvrir le document</a>
                         )}
                       </div>
                     </div>
@@ -700,6 +569,7 @@ export default function ElevesPage() {
               )}
             </div>
           </div>
+        </div>
         </div>
       )}
 

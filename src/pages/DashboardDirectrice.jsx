@@ -6,7 +6,7 @@ import Loader from "../components/Loader";
 import { supabase } from "../services/supabaseClient";
 import { listerSections, anneeActive } from "../services/elevesService";
 import { soldeTousLesEleves, tousLesPaiementsRecents } from "../services/paiementsService";
-import { dateDuJourISO, formaterMontant, formaterDate, libelleType, libelleMode } from "../utils/format";
+import { dateDuJourISO, formaterMontant, formaterDate, libelleTypePaiement, libelleMode } from "../utils/format";
 
 export default function DashboardDirectrice() {
   const [chargement, setChargement] = useState(true);
@@ -116,7 +116,7 @@ export default function DashboardDirectrice() {
                     <tr key={op.id}>
                       <td>{formaterDate(op.date_paiement)}</td>
                       <td>{op.eleves ? `${op.eleves.prenom} ${op.eleves.nom}` : "—"}</td>
-                      <td>{libelleType[op.type]}</td>
+                      <td>{libelleTypePaiement(op.type, op.date_paiement)}</td>
                       <td>{libelleMode[op.mode]}</td>
                       <td className="montant">{formaterMontant(op.montant)}</td>
                     </tr>

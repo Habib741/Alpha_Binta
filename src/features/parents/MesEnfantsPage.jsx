@@ -5,6 +5,7 @@ import EmptyState from "../../components/EmptyState";
 import { mesEnfants } from "../../services/parentsService";
 import { historiquePresences } from "../../services/presencesService";
 import { formaterDate } from "../../utils/format";
+import { DOC_TYPES, obtenirUrlDocument } from "../../services/documentsService";
 
 const nomsDocuments = {
   PHOTO_IDENTITE_1: "Photo d'identité 1",
@@ -123,6 +124,19 @@ export default function MesEnfantsPage() {
 
             {informationsOuvertes && <div className="child-panel-content">
 
+            {(() => {
+              const photo = (enfant.documents_enfants ?? []).find((document) => document.type_document === DOC_TYPES.PHOTO_IDENTITE_1);
+              return photo?.chemin_storage ? (
+                <img
+                  className="child-photo"
+                  src={obtenirUrlDocument(photo.chemin_storage)}
+                  alt={`Photo de ${enfant.prenom} ${enfant.nom}`}
+                  onError={(e) => { e.currentTarget.style.display = "none"; }}
+                />
+              ) : (
+                <div className="child-photo child-photo-placeholder" aria-label="Photo non disponible">{enfant.prenom?.charAt(0)}</div>
+              );
+            })()}
             <div className="grid-2" style={{ marginTop: 18 }}>
               <div>
                 <strong>Date de naissance</strong>
@@ -176,19 +190,10 @@ export default function MesEnfantsPage() {
               ) : (
                 <ul style={{ margin: "8px 0 0 18px" }}>
                   {enfant.documents_enfants.map((document) => {
-                    const baseUrl = import.meta.env.VITE_SUPABASE_URL || "";
-                    const url = document.chemin_storage && baseUrl
-                      ? `${baseUrl}/storage/v1/object/public/documents-enfants/${encodeURIComponent(document.chemin_storage)}`
-                      : "";
+                    const url = obtenirUrlDocument(document.chemin_storage);
                     return (
                       <li key={document.id}>
-                        {url ? (
-                          <a href={url} target="_blank" rel="noreferrer">
-                            {nomsDocuments[document.type_document] ?? document.type_document}
-                          </a>
-                        ) : (
-                          nomsDocuments[document.type_document] ?? document.type_document
-                        )}
+                        {url ? <a href={url} target="_blank" rel="noreferrer">Ouvrir {nomsDocuments[document.type_document] ?? document.type_document}</a> : (nomsDocuments[document.type_document] ?? document.type_document)}
                         {document.nom_fichier ? ` (${document.nom_fichier})` : ""}
                       </li>
                     );

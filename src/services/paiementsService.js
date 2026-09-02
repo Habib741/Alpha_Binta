@@ -57,6 +57,15 @@ export async function historiquePaiements(eleveId) {
   return data;
 }
 
+export async function listerTousPaiements() {
+  const { data, error } = await supabase
+    .from("paiements")
+    .select("*, eleves(prenom, nom)")
+    .order("date_paiement", { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
 export async function tousLesPaiementsRecents(limite = 15) {
   const { data, error } = await supabase
     .from("paiements")

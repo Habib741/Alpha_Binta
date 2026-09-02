@@ -4,7 +4,7 @@ import Loader from "../../components/Loader";
 import EmptyState from "../../components/EmptyState";
 import { mesEnfants } from "../../services/parentsService";
 import { soldeEleve, historiquePaiements } from "../../services/paiementsService";
-import { formaterMontant, formaterDate, libelleType, libelleMode } from "../../utils/format";
+import { formaterMontant, formaterDate, libelleTypePaiement, libelleMode } from "../../utils/format";
 
 export default function MesPaiementsPage() {
   const [chargement, setChargement] = useState(true);
@@ -75,7 +75,7 @@ export default function MesPaiementsPage() {
                   {enfant.historique.map((p) => (
                     <tr key={p.id}>
                       <td>{formaterDate(p.date_paiement)}</td>
-                      <td>{libelleType[p.type]}</td>
+                      <td>{libelleTypePaiement(p.type, p.date_paiement)}</td>
                       <td className="montant">{formaterMontant(p.montant)}</td>
                       <td>{libelleMode[p.mode]}</td>
                     </tr>

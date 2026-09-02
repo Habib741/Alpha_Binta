@@ -5,8 +5,27 @@ export async function listerParents() {
     .from("parents")
     .select("*, parents_eleves(eleve_id, lien, eleves(prenom, nom))")
     .order("nom");
+
   if (error) throw error;
-  return data;
+
+  const idsProfils = [...new Set((data ?? []).map((parent) => parent.profile_id).filter(Boolean))];
+
+  let emailsParProfil = {};
+  if (idsProfils.length > 0) {
+    const { data: profils, error: profilError } = await supabase
+      .from("profiles")
+      .select("id, email")
+      .in("id", idsProfils);
+
+    if (profilError) throw profilError;
+
+    emailsParProfil = Object.fromEntries((profils ?? []).map((profil) => [profil.id, profil.email]));
+  }
+
+  return (data ?? []).map((parent) => ({
+    ...parent,
+    email: emailsParProfil[parent.profile_id] ?? null,
+  }));
 }
 
 export async function listerEnfantsDisponibles() {
@@ -23,6 +42,16 @@ export async function listerEnfantsDisponibles() {
 
   const enfantsDejaLies = new Set((liens ?? []).map((lien) => lien.eleve_id));
   return (data ?? []).filter((eleve) => !enfantsDejaLies.has(eleve.id));
+}
+
+export async function lierEnfantParent(parentId, eleveId) {
+  const { data, error } = await supabase
+    .from("parents_eleves")
+    .insert({ parent_id: parentId, eleve_id: eleveId, lien: "Parent" })
+    .select("*, eleves(prenom, nom)")
+    .single();
+  if (error) throw error;
+  return data;
 }
 
 export async function creerCompteParent({ prenom, nom, telephone, email, adresse, mot_de_passe, enfants = [] }) {
@@ -72,6 +101,7 @@ export async function creerCompteParent({ prenom, nom, telephone, email, adresse
         prenom,
         nom,
         telephone,
+        email,
       },
       { onConflict: "id" }
     )

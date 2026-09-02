@@ -6,6 +6,21 @@
 
 create extension if not exists pgcrypto;
 
+insert into storage.buckets (id, name, public)
+values ('emploi-du-temps', 'emploi-du-temps', true)
+on conflict (id) do update set public = true;
+
+create table emplois_du_temps (
+  id uuid primary key default gen_random_uuid(),
+  section_id uuid unique not null references sections(id) on delete cascade,
+  chemin_storage text not null,
+  nom_fichier text not null,
+  mime_type text not null,
+  taille_bytes bigint,
+  publie_par uuid not null references profiles(id),
+  mis_a_jour_le timestamptz not null default now()
+);
+
 -- ============================================================================
 -- 1. TABLES DE RÉFÉRENCE
 -- ============================================================================
@@ -35,6 +50,7 @@ create table profiles (
   prenom text not null,
   nom text not null,
   telephone text,
+  email text,
   fonction text,
   actif boolean not null default true,
   created_at timestamptz not null default now()
@@ -48,19 +64,21 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.profiles (id, role, prenom, nom, telephone)
+  insert into public.profiles (id, role, prenom, nom, telephone, email)
   values (
     new.id,
     coalesce(new.raw_user_meta_data->>'role', 'PARENT'),
     coalesce(new.raw_user_meta_data->>'prenom', 'Utilisateur'),
     coalesce(new.raw_user_meta_data->>'nom', 'Sans nom'),
-    new.raw_user_meta_data->>'telephone'
+    new.raw_user_meta_data->>'telephone',
+    new.email
   )
   on conflict (id) do update
   set role = excluded.role,
       prenom = excluded.prenom,
       nom = excluded.nom,
-      telephone = coalesce(excluded.telephone, public.profiles.telephone);
+      telephone = coalesce(excluded.telephone, public.profiles.telephone),
+      email = coalesce(excluded.email, public.profiles.email);
 
   return new;
 end;
@@ -69,6 +87,24 @@ $$;
 create or replace trigger on_auth_user_created
 after insert on auth.users
 for each row execute procedure public.handle_new_user();
+
+create or replace function public.sync_profile_email()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.profiles
+  set email = new.email
+  where id = new.id;
+  return new;
+end;
+$$;
+
+create or replace trigger on_auth_user_email_updated
+after update of email on auth.users
+for each row execute procedure public.sync_profile_email();
 
 -- ============================================================================
 -- 3. ÉLÈVES ET INSCRIPTIONS
@@ -214,9 +250,6 @@ create table informations_ecole (
 );
 create index idx_infos_ecole_date on informations_ecole(date_publication desc);
 
--- ============================================================================
--- 9. MATIERES, COMPOSITIONS ET NOTES
--- ============================================================================
 
 create table matieres (
   id uuid primary key default gen_random_uuid(),
@@ -280,10 +313,16 @@ select
     select sum(t.montant)
     from tarifs t
     where t.section_id = i.section_id
+create table emplois_du_temps (
+  id uuid primary key,
+  chemin_storage text not null,
+  nom_fichier text not null,
+  mime_type text not null,
+  taille_bytes bigint,
+  publie_par uuid not null references profiles(id),
+  mis_a_jour_le timestamptz not null default now()
+);
       and t.annee_scolaire_id = i.annee_scolaire_id
-  ), 0)
-  -
-  coalesce((
     select sum(p.montant)
     from paiements p
     where p.eleve_id = e.id

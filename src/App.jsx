@@ -18,6 +18,7 @@ import MesEnfantsPage from "./features/parents/MesEnfantsPage";
 import InformationsPage from "./features/informations-ecole/InformationsPage";
 import NotesPage from "./features/notes/NotesPage";
 import MesNotesPage from "./features/notes/MesNotesPage";
+import EmploiDuTempsPage from "./features/emploi-du-temps/EmploiDuTempsPage";
 
 function RedirectionRacine() {
   const { session, profile, loading, profileError } = useAuth();
@@ -107,6 +108,14 @@ export default function App() {
         element={
           <ProtectedRoute rolesAutorises={["DIRECTRICE", "ENSEIGNANT", "PARENT"]}>
             <InformationsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/emploi-du-temps"
+        element={
+          <ProtectedRoute rolesAutorises={["DIRECTRICE", "ENSEIGNANT", "PARENT"]}>
+            <EmploiDuTempsPage />
           </ProtectedRoute>
         }
       />
