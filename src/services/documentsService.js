@@ -10,9 +10,11 @@ export const DOC_TYPES = {
 
 const BUCKET_NAME = "documents-enfants";
 
-export function obtenirUrlDocument(cheminStorage) {
+export async function obtenirUrlDocument(cheminStorage) {
   if (!cheminStorage) return "";
-  return supabase.storage.from(BUCKET_NAME).getPublicUrl(cheminStorage).data.publicUrl;
+  const { data, error } = await supabase.storage.from(BUCKET_NAME).createSignedUrl(cheminStorage, 300);
+  if (error) throw error;
+  return data?.signedUrl || "";
 }
 
 function buildStoragePath(eleveId, typeDocument, fileName) {

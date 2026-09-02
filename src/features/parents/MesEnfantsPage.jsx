@@ -64,6 +64,10 @@ export default function MesEnfantsPage() {
             ...e,
             informations: extraireInformations(e.informations_complementaires),
             presences: await historiquePresences(e.id).catch(() => []),
+            documents: await Promise.all((e.documents_enfants ?? []).map(async (document) => ({
+              ...document,
+              url: await obtenirUrlDocument(document.chemin_storage).catch(() => ""),
+            }))),
           }))
         );
         setEnfants(enrichis);
@@ -125,11 +129,11 @@ export default function MesEnfantsPage() {
             {informationsOuvertes && <div className="child-panel-content">
 
             {(() => {
-              const photo = (enfant.documents_enfants ?? []).find((document) => document.type_document === DOC_TYPES.PHOTO_IDENTITE_1);
-              return photo?.chemin_storage ? (
+              const photo = (enfant.documents ?? []).find((document) => document.type_document === DOC_TYPES.PHOTO_IDENTITE_1);
+              return photo?.url ? (
                 <img
                   className="child-photo"
-                  src={obtenirUrlDocument(photo.chemin_storage)}
+                  src={photo.url}
                   alt={`Photo de ${enfant.prenom} ${enfant.nom}`}
                   onError={(e) => { e.currentTarget.style.display = "none"; }}
                 />
@@ -185,12 +189,12 @@ export default function MesEnfantsPage() {
 
             <div style={{ marginTop: 18 }}>
               <h4>Documents enregistrés</h4>
-              {(enfant.documents_enfants ?? []).length === 0 ? (
+              {(enfant.documents ?? []).length === 0 ? (
                 <p>Aucun document enregistré.</p>
               ) : (
                 <ul style={{ margin: "8px 0 0 18px" }}>
-                  {enfant.documents_enfants.map((document) => {
-                    const url = obtenirUrlDocument(document.chemin_storage);
+                  {enfant.documents.map((document) => {
+                    const url = document.url;
                     return (
                       <li key={document.id}>
                         {url ? <a href={url} target="_blank" rel="noreferrer">Ouvrir {nomsDocuments[document.type_document] ?? document.type_document}</a> : (nomsDocuments[document.type_document] ?? document.type_document)}

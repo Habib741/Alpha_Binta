@@ -19,28 +19,25 @@ export default function DashboardEnseignant() {
         const today = dateDuJourISO();
         const [sections, annee] = await Promise.all([listerSections(), anneeActive()]);
 
-        const statuts = await Promise.all(
-          sections.map(async (section) => {
-            const { data: inscrits } = await supabase
-              .from("inscriptions")
-              .select("eleve_id")
-              .eq("section_id", section.id)
-              .eq("annee_scolaire_id", annee.id);
-
-            const eleveIds = (inscrits ?? []).map((i) => i.eleve_id);
-            let fait = false;
-            if (eleveIds.length > 0) {
-              const { data: presencesFaites } = await supabase
-                .from("presences")
-                .select("eleve_id")
-                .eq("date", today)
-                .in("eleve_id", eleveIds);
-              fait = (presencesFaites ?? []).length >= eleveIds.length;
-            }
-
-            return { id: section.id, nom: section.nom, total: eleveIds.length, fait };
-          })
-        );
+        const [{ data: inscrits }, { data: presencesFaites }] = await Promise.all([
+          supabase
+            .from("inscriptions")
+            .select("section_id, eleve_id")
+            .eq("annee_scolaire_id", annee.id),
+          supabase.from("presences").select("eleve_id").eq("date", today),
+        ]);
+        const presenceIds = new Set((presencesFaites ?? []).map((presence) => presence.eleve_id));
+        const statuts = sections.map((section) => {
+          const eleveIds = (inscrits ?? [])
+            .filter((inscription) => inscription.section_id === section.id)
+            .map((inscription) => inscription.eleve_id);
+          return {
+            id: section.id,
+            nom: section.nom,
+            total: eleveIds.length,
+            fait: eleveIds.length > 0 && eleveIds.every((eleveId) => presenceIds.has(eleveId)),
+          };
+        });
         setSectionsStatut(statuts);
 
         const { data: presencesJour } = await supabase

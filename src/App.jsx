@@ -1,24 +1,24 @@
+import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import ProtectedRoute from "./auth/ProtectedRoute";
 import Loader from "./components/Loader";
 
-import LoginPage from "./pages/LoginPage";
-import ProfilPage from "./pages/ProfilPage";
-import DashboardDirectrice from "./pages/DashboardDirectrice";
-import DashboardEnseignant from "./pages/DashboardEnseignant";
-import DashboardParent from "./pages/DashboardParent";
-
-import ElevesPage from "./features/eleves/ElevesPage";
-import PresencesPage from "./features/presences/PresencesPage";
-import PaiementsPage from "./features/paiements/PaiementsPage";
-import MesPaiementsPage from "./features/paiements/MesPaiementsPage";
-import ParentsPage from "./features/parents/ParentsPage";
-import MesEnfantsPage from "./features/parents/MesEnfantsPage";
-import InformationsPage from "./features/informations-ecole/InformationsPage";
-import NotesPage from "./features/notes/NotesPage";
-import MesNotesPage from "./features/notes/MesNotesPage";
-import EmploiDuTempsPage from "./features/emploi-du-temps/EmploiDuTempsPage";
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const ProfilPage = lazy(() => import("./pages/ProfilPage"));
+const DashboardDirectrice = lazy(() => import("./pages/DashboardDirectrice"));
+const DashboardEnseignant = lazy(() => import("./pages/DashboardEnseignant"));
+const DashboardParent = lazy(() => import("./pages/DashboardParent"));
+const ElevesPage = lazy(() => import("./features/eleves/ElevesPage"));
+const PresencesPage = lazy(() => import("./features/presences/PresencesPage"));
+const PaiementsPage = lazy(() => import("./features/paiements/PaiementsPage"));
+const MesPaiementsPage = lazy(() => import("./features/paiements/MesPaiementsPage"));
+const ParentsPage = lazy(() => import("./features/parents/ParentsPage"));
+const MesEnfantsPage = lazy(() => import("./features/parents/MesEnfantsPage"));
+const InformationsPage = lazy(() => import("./features/informations-ecole/InformationsPage"));
+const NotesPage = lazy(() => import("./features/notes/NotesPage"));
+const MesNotesPage = lazy(() => import("./features/notes/MesNotesPage"));
+const EmploiDuTempsPage = lazy(() => import("./features/emploi-du-temps/EmploiDuTempsPage"));
 
 function RedirectionRacine() {
   const { session, profile, loading, profileError } = useAuth();
@@ -42,7 +42,8 @@ function RedirectionRacine() {
 
 export default function App() {
   return (
-    <Routes>
+    <Suspense fallback={<Loader plein />}>
+      <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/" element={<RedirectionRacine />} />
 
@@ -162,6 +163,7 @@ export default function App() {
       />
 
       <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+      </Routes>
+    </Suspense>
   );
 }

@@ -1,9 +1,44 @@
 ﻿node_modules/
 dist/
 .vite/
+
+# Environment files and local secrets
 .env
 .env.local
+.env.*.local
+
+# Logs and reports
 .DS_Store
 npm-debug.log*
-coverage/
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 *.log
+reports/
+coverage/
+
+# Local tooling and operating-system files
+.idea/
+.history/
+*.swp
+*.swo
+Thumbs.db
+desktop.ini
+
+# Temporary and cache files
+.cache/
+.tmp/
+tmp/
+*.tmp
+*.temp
+*.tsbuildinfo
+
+# Existing build and test output
+.nyc_output/
+
+# Local database exports and backups
+*.sql.bak
+*.sql.tmp
+*.dump
+*.backup
+sql/local/

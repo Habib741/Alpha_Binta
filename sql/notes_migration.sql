@@ -4,13 +4,34 @@
 -- Le bucket doit être public pour permettre l'affichage des photos et
 -- l'ouverture des documents via leurs URLs Storage.
 insert into storage.buckets (id, name, public)
-values ('documents-enfants', 'documents-enfants', true)
-on conflict (id) do update set public = true;
+values ('documents-enfants', 'documents-enfants', false)
+on conflict (id) do update set public = false;
 
 drop policy if exists documents_enfants_select on storage.objects;
 create policy documents_enfants_select on storage.objects
 for select
-using (bucket_id = 'documents-enfants' and auth.uid() is not null);
+using (
+  bucket_id = 'documents-enfants'
+  and (
+    public.mon_role() = 'DIRECTRICE'
+    or (
+      public.mon_role() = 'PARENT'
+      and name ~ '^eleves/[0-9a-f-]{36}/'
+      and exists (select 1 from public.parents_eleves pe join public.parents p on p.id = pe.parent_id where pe.eleve_id = split_part(name, '/', 2)::uuid and p.profile_id = auth.uid())
+    )
+  )
+);
+
+drop policy if exists documents_enfants_insert_directrice on storage.objects;
+drop policy if exists documents_enfants_update_directrice on storage.objects;
+drop policy if exists documents_enfants_delete_directrice on storage.objects;
+create policy documents_enfants_insert_directrice on storage.objects
+for insert with check (bucket_id = 'documents-enfants' and public.mon_role() = 'DIRECTRICE');
+create policy documents_enfants_update_directrice on storage.objects
+for update using (bucket_id = 'documents-enfants' and public.mon_role() = 'DIRECTRICE')
+with check (bucket_id = 'documents-enfants' and public.mon_role() = 'DIRECTRICE');
+create policy documents_enfants_delete_directrice on storage.objects
+for delete using (bucket_id = 'documents-enfants' and public.mon_role() = 'DIRECTRICE');
 
 insert into storage.buckets (id, name, public)
 values ('emploi-du-temps', 'emploi-du-temps', true)
@@ -84,6 +105,11 @@ with check (public.mon_role() = 'DIRECTRICE');
 drop policy if exists parents_eleves_insert_directrice on public.parents_eleves;
 create policy parents_eleves_insert_directrice on public.parents_eleves for insert
 with check (public.mon_role() = 'DIRECTRICE');
+
+drop policy if exists documents_enfants_select_staff on public.documents_enfants;
+drop policy if exists documents_enfants_select_directrice on public.documents_enfants;
+create policy documents_enfants_select_directrice on public.documents_enfants for select
+using (public.mon_role() = 'DIRECTRICE');
 
 alter table public.matieres enable row level security;
 alter table public.compositions enable row level security;

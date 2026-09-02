@@ -7,19 +7,12 @@
 create extension if not exists pgcrypto;
 
 insert into storage.buckets (id, name, public)
+values ('documents-enfants', 'documents-enfants', false)
+on conflict (id) do update set public = false;
+
+insert into storage.buckets (id, name, public)
 values ('emploi-du-temps', 'emploi-du-temps', true)
 on conflict (id) do update set public = true;
-
-create table emplois_du_temps (
-  id uuid primary key default gen_random_uuid(),
-  section_id uuid unique not null references sections(id) on delete cascade,
-  chemin_storage text not null,
-  nom_fichier text not null,
-  mime_type text not null,
-  taille_bytes bigint,
-  publie_par uuid not null references profiles(id),
-  mis_a_jour_le timestamptz not null default now()
-);
 
 -- ============================================================================
 -- 1. TABLES DE RÉFÉRENCE
@@ -105,6 +98,17 @@ $$;
 create or replace trigger on_auth_user_email_updated
 after update of email on auth.users
 for each row execute procedure public.sync_profile_email();
+
+create table emplois_du_temps (
+  id uuid primary key default gen_random_uuid(),
+  section_id uuid unique not null references sections(id) on delete cascade,
+  chemin_storage text not null,
+  nom_fichier text not null,
+  mime_type text not null,
+  taille_bytes bigint,
+  publie_par uuid not null references profiles(id),
+  mis_a_jour_le timestamptz not null default now()
+);
 
 -- ============================================================================
 -- 3. ÉLÈVES ET INSCRIPTIONS
@@ -313,15 +317,6 @@ select
     select sum(t.montant)
     from tarifs t
     where t.section_id = i.section_id
-create table emplois_du_temps (
-  id uuid primary key,
-  chemin_storage text not null,
-  nom_fichier text not null,
-  mime_type text not null,
-  taille_bytes bigint,
-  publie_par uuid not null references profiles(id),
-  mis_a_jour_le timestamptz not null default now()
-);
       and t.annee_scolaire_id = i.annee_scolaire_id
     select sum(p.montant)
     from paiements p
@@ -402,6 +397,7 @@ alter table documents_enfants enable row level security;
 alter table matieres enable row level security;
 alter table compositions enable row level security;
 alter table notes enable row level security;
+alter table emplois_du_temps enable row level security;
 
 -- ============================================================================
 -- 13. POLITIQUES RLS
@@ -429,6 +425,15 @@ create policy sections_update on sections for update
 using (mon_role() = 'DIRECTRICE');
 create policy sections_delete on sections for delete
 using (mon_role() = 'DIRECTRICE');
+
+-- EMPLOIS DU TEMPS
+create policy emplois_du_temps_select on emplois_du_temps for select
+using (auth.uid() is not null);
+create policy emplois_du_temps_insert_directrice on emplois_du_temps for insert
+with check (mon_role() = 'DIRECTRICE');
+create policy emplois_du_temps_update_directrice on emplois_du_temps for update
+using (mon_role() = 'DIRECTRICE')
+with check (mon_role() = 'DIRECTRICE');
 
 -- ANNEES SCOLAIRES
 create policy annees_select on annees_scolaires for select
@@ -527,8 +532,8 @@ create policy infos_delete on informations_ecole for delete
 using (mon_role() = 'DIRECTRICE');
 
 -- DOCUMENTS ENFANTS
-create policy documents_enfants_select_staff on documents_enfants for select
-using (mon_role() in ('DIRECTRICE','ENSEIGNANT'));
+create policy documents_enfants_select_directrice on documents_enfants for select
+using (mon_role() = 'DIRECTRICE');
 create policy documents_enfants_select_parent on documents_enfants for select
 using (mon_role() = 'PARENT' and est_mon_enfant(eleve_id));
 create policy documents_enfants_insert on documents_enfants for insert
@@ -537,6 +542,38 @@ create policy documents_enfants_update on documents_enfants for update
 using (mon_role() = 'DIRECTRICE');
 create policy documents_enfants_delete on documents_enfants for delete
 using (mon_role() = 'DIRECTRICE');
+
+-- STORAGE — les documents enfants restent privés et sont servis par URL signée.
+create policy documents_enfants_storage_select on storage.objects for select
+using (
+  bucket_id = 'documents-enfants'
+  and (
+    mon_role() = 'DIRECTRICE'
+    or (mon_role() = 'PARENT' and name ~ '^eleves/[0-9a-f-]{36}/' and exists (
+      select 1 from parents_eleves pe
+      join parents p on p.id = pe.parent_id
+      where pe.eleve_id = split_part(name, '/', 2)::uuid
+        and p.profile_id = auth.uid()
+    ))
+  )
+);
+create policy documents_enfants_storage_insert on storage.objects for insert
+with check (bucket_id = 'documents-enfants' and mon_role() = 'DIRECTRICE');
+create policy documents_enfants_storage_update on storage.objects for update
+using (bucket_id = 'documents-enfants' and mon_role() = 'DIRECTRICE')
+with check (bucket_id = 'documents-enfants' and mon_role() = 'DIRECTRICE');
+create policy documents_enfants_storage_delete on storage.objects for delete
+using (bucket_id = 'documents-enfants' and mon_role() = 'DIRECTRICE');
+
+create policy emploi_du_temps_storage_select on storage.objects for select
+using (bucket_id = 'emploi-du-temps' and auth.uid() is not null);
+create policy emploi_du_temps_storage_insert on storage.objects for insert
+with check (bucket_id = 'emploi-du-temps' and mon_role() = 'DIRECTRICE');
+create policy emploi_du_temps_storage_update on storage.objects for update
+using (bucket_id = 'emploi-du-temps' and mon_role() = 'DIRECTRICE')
+with check (bucket_id = 'emploi-du-temps' and mon_role() = 'DIRECTRICE');
+create policy emploi_du_temps_storage_delete on storage.objects for delete
+using (bucket_id = 'emploi-du-temps' and mon_role() = 'DIRECTRICE');
 
 -- MATIERES, COMPOSITIONS ET NOTES
 create policy matieres_select on matieres for select

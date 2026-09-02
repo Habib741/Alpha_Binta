@@ -195,12 +195,17 @@ export default function ElevesPage() {
   }
 
   async function selectionnerEleve(eleve) {
+    setDocuments([]);
     setEleveSelectionne(eleve);
+    if (!estDirectrice) {
+      return;
+    }
     try {
       const listeDocuments = await listerDocumentsEleve(eleve.id);
-      const documentsAvecUrl = (listeDocuments || []).map((doc) => {
-        return { ...doc, publicUrl: obtenirUrlDocument(doc.chemin_storage) };
-      });
+      const documentsAvecUrl = await Promise.all((listeDocuments || []).map(async (doc) => ({
+        ...doc,
+        publicUrl: await obtenirUrlDocument(doc.chemin_storage),
+      })));
       setDocuments(documentsAvecUrl);
     } catch (err) {
       setDocuments([]);
