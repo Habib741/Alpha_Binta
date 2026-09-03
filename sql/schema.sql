@@ -484,6 +484,8 @@ create policy parents_insert on parents for insert
 with check (mon_role() = 'DIRECTRICE');
 create policy parents_update on parents for update
 using (mon_role() = 'DIRECTRICE' or profile_id = auth.uid());
+create policy parents_delete on parents for delete
+using (mon_role() = 'DIRECTRICE');
 
 -- PARENTS_ELEVES
 create policy parents_eleves_select_directrice on parents_eleves for select
@@ -498,6 +500,8 @@ using (
 );
 create policy parents_eleves_insert on parents_eleves for insert
 with check (mon_role() = 'DIRECTRICE');
+create policy parents_eleves_delete on parents_eleves for delete
+using (mon_role() = 'DIRECTRICE');
 
 -- PRESENCES
 create policy presences_select_staff on presences for select

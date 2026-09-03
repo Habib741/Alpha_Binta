@@ -9,6 +9,8 @@ import {
   listerEnfantsDisponibles,
   creerCompteParent,
   lierEnfantParent,
+  modifierParent,
+  supprimerParent,
 } from "../../services/parentsService";
 
 export default function ParentsPage() {
@@ -24,6 +26,8 @@ export default function ParentsPage() {
   const [recherche, setRecherche] = useState("");
   const [envoi, setEnvoi] = useState(false);
   const [enfantALier, setEnfantALier] = useState("");
+  const [parentEnEdition, setParentEnEdition] = useState(false);
+  const [formParent, setFormParent] = useState(null);
   const [form, setForm] = useState({
     prenom: "",
     nom: "",
@@ -108,6 +112,48 @@ export default function ParentsPage() {
       setParentSelectionne(parentActualise || parentSelectionne);
     } catch (error) {
       notifier(error?.message || "Erreur lors de la liaison de l'enfant.", "error");
+    } finally {
+      setEnvoi(false);
+    }
+  }
+
+  function ouvrirEditionParent() {
+    setFormParent({
+      prenom: parentSelectionne.prenom || "",
+      nom: parentSelectionne.nom || "",
+      telephone: parentSelectionne.telephone || "",
+      email: parentSelectionne.email || "",
+      adresse: parentSelectionne.adresse || "",
+    });
+    setParentEnEdition(true);
+  }
+
+  async function enregistrerParent(event) {
+    event.preventDefault();
+    setEnvoi(true);
+    try {
+      await modifierParent(parentSelectionne.id, parentSelectionne.profile_id, formParent);
+      notifier("Informations du parent modifiées.");
+      setParentEnEdition(false);
+      await chargerDonnees();
+      setParentSelectionne((await listerParents()).find((parent) => parent.id === parentSelectionne.id) || null);
+    } catch (error) {
+      notifier(error?.message || "Erreur lors de la modification du parent.", "error");
+    } finally {
+      setEnvoi(false);
+    }
+  }
+
+  async function supprimerParentSelectionne() {
+    if (!window.confirm(`Supprimer le compte de ${parentSelectionne.prenom} ${parentSelectionne.nom} ? Les liaisons avec ses enfants seront supprimées.`)) return;
+    setEnvoi(true);
+    try {
+      await supprimerParent(parentSelectionne.id, parentSelectionne.profile_id);
+      notifier("Parent supprimé, enfants détachés et compte désactivé.");
+      setParentSelectionne(null);
+      await chargerDonnees();
+    } catch (error) {
+      notifier(error?.message || "Erreur lors de la suppression du parent.", "error");
     } finally {
       setEnvoi(false);
     }
@@ -289,12 +335,25 @@ export default function ParentsPage() {
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 16 }}>
               <h3 style={{ margin: 0 }}>{parentSelectionne.prenom} {parentSelectionne.nom}</h3>
-              <button type="button" className="btn btn-ghost" onClick={() => setParentSelectionne(null)}>
-                Fermer
-              </button>
+              <div className="action-group">
+                <button type="button" className="btn btn-ghost" onClick={ouvrirEditionParent}>Modifier</button>
+                <button type="button" className="btn btn-ghost danger" onClick={supprimerParentSelectionne} disabled={envoi}>Supprimer</button>
+                <button type="button" className="btn btn-ghost" onClick={() => setParentSelectionne(null)}>Fermer</button>
+              </div>
             </div>
 
-            <div style={{ display: "grid", gap: 12 }}>
+            {parentEnEdition ? (
+              <form onSubmit={enregistrerParent}>
+                <div className="grid-2">
+                  <div className="field"><label>Prénom</label><input required value={formParent.prenom} onChange={(e) => setFormParent({ ...formParent, prenom: e.target.value })} /></div>
+                  <div className="field"><label>Nom</label><input required value={formParent.nom} onChange={(e) => setFormParent({ ...formParent, nom: e.target.value })} /></div>
+                  <div className="field"><label>Téléphone</label><input required value={formParent.telephone} onChange={(e) => setFormParent({ ...formParent, telephone: e.target.value })} /></div>
+                  <div className="field"><label>Email</label><input required type="email" value={formParent.email} onChange={(e) => setFormParent({ ...formParent, email: e.target.value })} /></div>
+                  <div className="field field-full"><label>Adresse</label><input value={formParent.adresse} onChange={(e) => setFormParent({ ...formParent, adresse: e.target.value })} /></div>
+                </div>
+                <div className="action-group"><button type="submit" className="btn btn-primary" disabled={envoi}>Enregistrer</button><button type="button" className="btn btn-ghost" onClick={() => setParentEnEdition(false)}>Annuler</button></div>
+              </form>
+            ) : <div style={{ display: "grid", gap: 12 }}>
               <div><strong>Prénom :</strong> {parentSelectionne.prenom || "—"}</div>
               <div><strong>Nom :</strong> {parentSelectionne.nom || "—"}</div>
               <div><strong>Téléphone :</strong> {parentSelectionne.telephone || "—"}</div>
@@ -325,7 +384,7 @@ export default function ParentsPage() {
                   </button>
                 </div>
               )}
-            </div>
+            </div>}
           </div>
         </div>
       )}

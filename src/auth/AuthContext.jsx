@@ -80,8 +80,19 @@ export function AuthProvider({ children }) {
   }, [chargerProfil]);
 
   const seConnecter = async (email, password) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error };
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return { error };
+
+    const { data: profil, error: profilError } = await supabase
+      .from("profiles")
+      .select("actif")
+      .eq("id", data.user.id)
+      .maybeSingle();
+    if (profilError || profil?.actif === false) {
+      await supabase.auth.signOut();
+      return { error: new Error("Ce compte est désactivé.") };
+    }
+    return { error: null };
   };
 
   const seDeconnecter = async () => {

@@ -54,6 +54,42 @@ export async function lierEnfantParent(parentId, eleveId) {
   return data;
 }
 
+export async function modifierParent(parentId, profileId, changements) {
+  const { data: parent, error: parentError } = await supabase
+    .from("parents")
+    .update({
+      prenom: changements.prenom,
+      nom: changements.nom,
+      telephone: changements.telephone,
+      adresse: changements.adresse || null,
+    })
+    .eq("id", parentId)
+    .select()
+    .single();
+  if (parentError) throw parentError;
+
+  const { error: profileError } = await supabase
+    .from("profiles")
+    .update({ prenom: changements.prenom, nom: changements.nom, telephone: changements.telephone, email: changements.email })
+    .eq("id", profileId);
+  if (profileError) throw profileError;
+  return parent;
+}
+
+export async function supprimerParent(parentId, profileId) {
+  const { error: liensError } = await supabase.from("parents_eleves").delete().eq("parent_id", parentId);
+  if (liensError) throw liensError;
+
+  const { error: parentError } = await supabase.from("parents").delete().eq("id", parentId);
+  if (parentError) throw parentError;
+
+  const { error: profileError } = await supabase
+    .from("profiles")
+    .update({ actif: false })
+    .eq("id", profileId);
+  if (profileError) throw profileError;
+}
+
 export async function creerCompteParent({ prenom, nom, telephone, email, adresse, mot_de_passe, enfants = [] }) {
   const motDePasse = String(mot_de_passe || "").trim();
   if (!motDePasse) {

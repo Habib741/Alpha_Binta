@@ -106,6 +106,14 @@ drop policy if exists parents_eleves_insert_directrice on public.parents_eleves;
 create policy parents_eleves_insert_directrice on public.parents_eleves for insert
 with check (public.mon_role() = 'DIRECTRICE');
 
+drop policy if exists parents_eleves_delete_directrice on public.parents_eleves;
+create policy parents_eleves_delete_directrice on public.parents_eleves for delete
+using (public.mon_role() = 'DIRECTRICE');
+
+drop policy if exists parents_delete_directrice on public.parents;
+create policy parents_delete_directrice on public.parents for delete
+using (public.mon_role() = 'DIRECTRICE');
+
 drop policy if exists documents_enfants_select_staff on public.documents_enfants;
 drop policy if exists documents_enfants_select_directrice on public.documents_enfants;
 create policy documents_enfants_select_directrice on public.documents_enfants for select
